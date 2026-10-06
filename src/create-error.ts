@@ -339,7 +339,10 @@ export function createError<
 
     constructor(message: string, options?: ErrorOptions) {
       super(message, options);
-      this.name = new.target.name;
+      const name = new.target.name;
+      if (name) {
+        this.name = name;
+      }
     }
   }
 
@@ -362,7 +365,7 @@ export function createError<
       implementation: RuntimeImplementation,
       contextSchema?: StandardSchemaV1,
     ) {
-      return class CreatedError extends FamilyError {
+      return class extends FamilyError {
         constructor(input: unknown, options?: ErrorOptions) {
           const resolvedData = config.data.resolve({
             definition: parsedDefinition,

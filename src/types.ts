@@ -316,6 +316,20 @@ type ImplementationCallback<Config, Definition, Data> = (
   argument: ImplementationArgument<Config, Definition, Data>,
 ) => string;
 
+type PassedImplementationArgument<Config, Definition, Data> =
+  MessageTemplate<Config> extends TypeSlot<
+    'implementationArgument',
+    infer Argument
+  >
+    ? Argument extends TypeSlot<'data'>
+      ? Data
+      : ReplaceTemplate<Argument, Definition, Data, never>
+    : never;
+
+type PassedImplementationCallback<Config, Definition, Data> = (
+  argument: PassedImplementationArgument<Config, Definition, Data>,
+) => string;
+
 interface ErrorClassStatics {
   /**
    * Throws this error class when `condition` is falsy.
@@ -371,7 +385,7 @@ type ImplementedErrorClass<Config, Definition, Input, Data> =
       Config,
       Definition,
       Data,
-      ImplementationCallback<Config, Definition, Data>
+      PassedImplementationCallback<Config, Definition, Data>
     >
   >;
 

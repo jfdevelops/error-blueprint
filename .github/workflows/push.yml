@@ -8,6 +8,7 @@ on:
       - alpha
       - beta
       - rc
+  pull_request:
 
 permissions:
   contents: read
