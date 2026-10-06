@@ -36,9 +36,7 @@ describe('definition schema', () => {
   });
 
   it('rejects asynchronous schemas clearly', () => {
-    const asyncSchema = z
-      .object({ code: z.string() })
-      .refine(async () => true);
+    const asyncSchema = z.object({ code: z.string() }).refine(async () => true);
     const createConfiguredError = createError({
       definition: asyncSchema,
       data: { property: 'data', resolve: ({ input }) => input },
@@ -211,9 +209,7 @@ describe('error factory', () => {
       message: () => 'context error',
     });
     const ContextError = createContextError({ code: 'context' })
-      .defineContext(
-        z.object({ value: z.string() }).refine(async () => true),
-      )
+      .defineContext(z.object({ value: z.string() }).refine(async () => true))
       .implement(() => 'context error');
 
     expect(() => new ContextError({ value: 'value' })).toThrow(
@@ -332,9 +328,9 @@ describe('error factory', () => {
       message: () => 'message',
       properties: () => ({ message: 'replacement' }),
     });
-    const ConflictingError = createConflictingError({ code: 'conflict' }).implement(
-      () => 'message',
-    );
+    const ConflictingError = createConflictingError({
+      code: 'conflict',
+    }).implement(() => 'message');
 
     expect(() => new ConflictingError(undefined)).toThrow(
       'Cannot overwrite protected error property "message"',
