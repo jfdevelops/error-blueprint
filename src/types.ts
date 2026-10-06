@@ -233,13 +233,19 @@ type ImplementedErrorClass<Config, Definition, Input, Data> =
     >
   >;
 
-type BuilderData<Data, InferredData> = [Data] extends [never]
-  ? InferredData
-  : Data;
+type ExtendsNever<Value, OnTrue, OnFalse> = [Value] extends [never]
+  ? OnTrue
+  : OnFalse;
 
-type DefaultBuilderData<Data> = [Data] extends [never] ? unknown : Data;
+type BuilderData<Data, InferredData> = ExtendsNever<Data, InferredData, Data>;
 
-type BuilderInput<Input, Data> = [Input] extends [never] ? Data : Input;
+type DefaultBuilderData<Data> = ExtendsNever<Data, unknown, Data>;
+
+type BuilderInput<Input, Data> = ExtendsNever<Input, Data, Input>;
+
+type Expand<Type> = Type extends (...arguments_: infer Arguments) => infer Result
+  ? (...arguments_: Arguments) => Result
+  : Type;
 
 /** Captures an implementation after its constructor and resolved data are known. */
 export interface ImplementationBuilder<
@@ -249,11 +255,11 @@ export interface ImplementationBuilder<
   Data = never,
 > {
   implement<InferredData = DefaultBuilderData<Data>>(
-    implementation: ImplementationCallback<
+    implementation: Expand<ImplementationCallback<
       Config,
       Definition,
       BuilderData<Data, InferredData>
-    >,
+    >>,
   ): ImplementedErrorClass<
     Config,
     Definition,
