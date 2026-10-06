@@ -27,6 +27,14 @@ const createConsumerError = createError({
       scope: definition.scope,
     };
   },
+  toJSON(error) {
+    return {
+      code: error.code,
+      context: error.context,
+      message: error.message,
+      scope: error.scope,
+    };
+  },
 });
 
 class ConsumerError extends createConsumerError({
@@ -48,5 +56,14 @@ expectTypeOf(error.scope).toEqualTypeOf<'package'>();
 expectTypeOf(error.context).toEqualTypeOf<{
   scope: 'package';
   value: string;
+}>();
+expectTypeOf(error.toJSON()).toEqualTypeOf<{
+  code: 'consumer';
+  context: {
+    scope: 'package';
+    value: string;
+  };
+  message: string;
+  scope: 'package';
 }>();
 expectTypeOf(error).toMatchTypeOf<InstanceType<typeof createConsumerError.Error>>();

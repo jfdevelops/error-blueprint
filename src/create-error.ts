@@ -1,6 +1,11 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
-import type { BlueprintConfig, ErrorFamilyFactory } from './types.js';
+import type {
+  BlueprintConfig,
+  BlueprintContext,
+  BlueprintErrorTemplate,
+  ErrorFamilyFactory,
+} from './types.js';
 
 type RuntimeImplementation = (...arguments_: never[]) => string;
 
@@ -143,6 +148,85 @@ function assignProperties(
  */
 export function createError<
   const Schema extends StandardSchemaV1,
+  const DataConfig extends BlueprintConfig<Schema>['data'],
+  const MessageCallback extends BlueprintConfig<Schema>['message'],
+  const Properties extends object,
+  Json,
+>(
+  config: {
+    definition: Schema;
+    data: DataConfig;
+    message: MessageCallback;
+    properties(context: BlueprintContext<Schema>): Properties;
+    toJSON(
+      error: BlueprintErrorTemplate<
+        {
+          data: NoInfer<DataConfig>;
+          properties(
+            context: BlueprintContext<Schema>,
+          ): NoInfer<Properties>;
+        }
+      >,
+    ): Json;
+  } &
+    (StandardSchemaV1.InferOutput<Schema> extends object
+      ? unknown
+      : { definition: never }),
+): ErrorFamilyFactory<
+  Schema,
+  {
+    definition: Schema;
+    data: DataConfig;
+    message: MessageCallback;
+    properties(context: BlueprintContext<Schema>): Properties;
+    toJSON(
+      error: BlueprintErrorTemplate<
+        {
+          data: DataConfig;
+          properties(context: BlueprintContext<Schema>): Properties;
+        }
+      >,
+    ): Json;
+  }
+>;
+export function createError<
+  const Schema extends StandardSchemaV1,
+  const DataConfig extends BlueprintConfig<Schema>['data'],
+  const MessageCallback extends BlueprintConfig<Schema>['message'],
+  Json,
+>(
+  config: {
+    definition: Schema;
+    data: DataConfig;
+    message: MessageCallback;
+    properties?: never;
+    toJSON(
+      error: BlueprintErrorTemplate<{ data: NoInfer<DataConfig> }>,
+    ): Json;
+  } &
+    (StandardSchemaV1.InferOutput<Schema> extends object
+      ? unknown
+      : { definition: never }),
+): ErrorFamilyFactory<
+  Schema,
+  {
+    definition: Schema;
+    data: DataConfig;
+    message: MessageCallback;
+    toJSON(error: BlueprintErrorTemplate<{ data: DataConfig }>): Json;
+  }
+>;
+export function createError<
+  const Schema extends StandardSchemaV1,
+  const Config extends Omit<BlueprintConfig<Schema>, 'definition'>,
+>(
+  config: { definition: Schema } & Config &
+    (StandardSchemaV1.InferOutput<Schema> extends object
+      ? unknown
+      : { definition: never }),
+): ErrorFamilyFactory<Schema, { definition: Schema } & Config>;
+export function createError<
+  const Schema extends StandardSchemaV1,
   const Config extends Omit<BlueprintConfig<Schema>, 'definition'>,
 >(
   config: { definition: Schema } & Config &
@@ -179,7 +263,7 @@ export function createError<
     Object.defineProperty(FamilyError.prototype, 'toJSON', {
       configurable: true,
       value: function toJSON(this: Error & Record<string, unknown>) {
-        return config.toJSON?.(this);
+        return config.toJSON?.(this as never);
       },
       writable: true,
     });

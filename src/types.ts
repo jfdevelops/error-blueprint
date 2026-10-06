@@ -51,13 +51,13 @@ type ImplementationPlaceholder = {
   readonly [implementationPlaceholderBrand]: true;
 };
 
-interface BlueprintContext<Schema extends StandardSchemaV1> {
+export interface BlueprintContext<Schema extends StandardSchemaV1> {
   definition: DefinitionPlaceholder<Schema>;
   data: DataPlaceholder;
   implementation: ImplementationPlaceholder;
 }
 
-interface ResolveContext<Schema extends StandardSchemaV1> {
+export interface ResolveContext<Schema extends StandardSchemaV1> {
   definition: DefinitionPlaceholder<Schema>;
   input: InputPlaceholder;
 }
@@ -164,6 +164,16 @@ type PropertiesTemplate<Config> = Config extends {
   ? Properties
   : object;
 
+type DataPropertyTemplate<Config> = Config extends {
+  data: { property: infer Property extends string };
+}
+  ? { [Key in Property]: DataPlaceholder }
+  : object;
+
+export type BlueprintErrorTemplate<Config> = Error &
+  DataPropertyTemplate<Config> &
+  PropertiesTemplate<Config>;
+
 type InstanceProperties<Config, Definition, Data, Implementation> =
   ReplaceTemplate<
     PropertiesTemplate<Config>,
@@ -175,7 +185,14 @@ type InstanceProperties<Config, Definition, Data, Implementation> =
     (Config extends {
       toJSON: (...arguments_: infer _Arguments) => infer Json;
     }
-      ? { toJSON(): Json }
+      ? {
+          toJSON(): ReplaceTemplate<
+            Json,
+            Definition,
+            Data,
+            Implementation
+          >;
+        }
       : object);
 
 type MessageTemplate<Config> = Config extends {

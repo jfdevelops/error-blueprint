@@ -34,6 +34,20 @@ describe('public inference contract', () => {
         },
       };
     },
+    toJSON(error) {
+      if (false) {
+        // @ts-expect-error serializers can only read configured error fields
+        error.missing;
+      }
+
+      return {
+        code: error.code,
+        context: error.context,
+        message: error.message,
+        name: error.name,
+        scope: error.scope,
+      };
+    },
   });
 
   const InvalidFieldError = createDomainError({
@@ -63,6 +77,16 @@ describe('public inference contract', () => {
     expectTypeOf(error.context).toEqualTypeOf<{
       scope: 'field';
       field: string;
+    }>();
+    expectTypeOf(error.toJSON()).toEqualTypeOf<{
+      code: 'invalidField';
+      context: {
+        scope: 'field';
+        field: string;
+      };
+      message: string;
+      name: string;
+      scope: 'field';
     }>();
     expectTypeOf(error).toMatchTypeOf<InstanceType<typeof createDomainError.Error>>();
 
@@ -145,5 +169,27 @@ describe('public inference contract', () => {
       .defineContext(z.union([z.null(), z.undefined()]))
       .implement((data) => String(data));
     expectTypeOf(new NullableError(null).data).toEqualTypeOf<null | undefined>();
+  });
+
+  it('infers serialized data without configured properties', () => {
+    const createJsonError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'payload', resolve: ({ input }) => input },
+      message: ({ data, implementation }) => implementation(data),
+      toJSON(error) {
+        return {
+          message: error.message,
+          payload: error.payload,
+        };
+      },
+    });
+    const JsonError = createJsonError({ code: 'json' })
+      .defineContext(z.object({ value: z.string() }))
+      .implement(({ value }) => value);
+
+    expectTypeOf(new JsonError({ value: 'typed' }).toJSON()).toEqualTypeOf<{
+      message: string;
+      payload: { value: string };
+    }>();
   });
 });
