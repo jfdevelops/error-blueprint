@@ -1,6 +1,6 @@
 {
   "name": "@jfdevelops/create-error",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Create strongly typed, configurable error families.",
   "sideEffects": false,
   "type": "module",
