@@ -74,8 +74,22 @@ export interface ResolveContext<Schema extends StandardSchemaV1> {
   input: object;
 }
 
-/** Configuration used to create one related family of error classes. */
-export interface BlueprintConfig<Schema extends StandardSchemaV1> {
+/**
+ * Configuration accepted by {@link createError}.
+ *
+ * @example
+ * ```ts
+ * const config = {
+ *   definition,
+ *   data: {
+ *     property: 'context',
+ *     resolve: ({ input }) => input,
+ *   },
+ *   message: ({ data, implementation }) => implementation(data),
+ * } satisfies CreateErrorConfig<typeof definition>;
+ * ```
+ */
+export interface CreateErrorConfig<Schema extends StandardSchemaV1> {
   /**
    * A Standard Schema object that parses every concrete error definition.
    * Validation must be synchronous because class creation is synchronous.
@@ -161,36 +175,6 @@ export interface BlueprintConfig<Schema extends StandardSchemaV1> {
    */
   toJSON?(error: Error & Record<string, unknown>): unknown;
 }
-
-/**
- * Configuration accepted by {@link createError}.
- *
- * The second type parameter preserves a specific configuration body during
- * factory inference. Consumers usually only need to provide the definition
- * schema type.
- *
- * @example
- * ```ts
- * const config = {
- *   definition,
- *   data: {
- *     property: 'context',
- *     resolve: ({ input }) => input,
- *   },
- *   message: ({ data, implementation }) => implementation(data),
- * } satisfies CreateErrorConfig<typeof definition>;
- * ```
- */
-export type CreateErrorConfig<
-  Schema extends StandardSchemaV1,
-  Config = Omit<BlueprintConfig<Schema>, 'definition'>,
-> = {
-  /** A synchronous Standard Schema for every concrete error definition. */
-  definition: Schema;
-} & Config &
-  (StandardSchemaV1.InferOutput<Schema> extends object
-    ? unknown
-    : { definition: never });
 
 type ResolveTemplate<Config> = Config extends {
   data: { resolve: (...arguments_: infer _Arguments) => infer Resolved };
