@@ -1,7 +1,7 @@
 import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 
-import { createError } from '../src/index.js';
+import { createError, invariant } from '../src/index.js';
 
 describe('public inference contract', () => {
   const createDomainError = createError({
@@ -213,5 +213,116 @@ describe('public inference contract', () => {
       message: string;
       payload: { value: string };
     }>();
+  });
+
+  it('accepts a class name option', () => {
+    const createLookupError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'resourceId', resolve: ({ input }) => input },
+      message: ({ data, implementation }) => implementation(data),
+    });
+    const MissingResourceError = createLookupError({ code: 'missingResource' })
+      .defineContext(z.string())
+      .implement((resourceId) => `${resourceId} was not found`, {
+        name: 'MissingResourceError',
+      });
+
+    expectTypeOf(new MissingResourceError('resource').resourceId).toBeString();
+    if (false) {
+      createLookupError({ code: 'missingResource' }).implement(
+        (resourceId: string) => resourceId,
+        // @ts-expect-error name must be a string
+        { name: 1 },
+      );
+    }
+  });
+
+  it('passes built-in class instances without definition fields', () => {
+    const createInstanceError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'data', resolve: ({ input }) => input },
+      message: ({ implementation }) =>
+        implementation({
+          occurredAt: new Date(),
+          tags: new Map<string, number>(),
+        }),
+      properties: () => ({ createdAt: new Date() }),
+      toJSON: (error) => ({ createdAt: error.createdAt }),
+    });
+    const createDateError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'data', resolve: ({ input }) => input },
+      message: ({ implementation }) => implementation(new Date()),
+    });
+
+    const InstanceError = createInstanceError({ code: 'instance' }).implement(
+      ({ code, occurredAt, tags }) => {
+        expectTypeOf(code).toBeString();
+        expectTypeOf(occurredAt).toEqualTypeOf<Date>();
+        expectTypeOf(tags).toEqualTypeOf<Map<string, number>>();
+        return `${code} ${tags.size}`;
+      },
+    );
+    const DateError = createDateError({ code: 'date' }).implement((date) => {
+      expectTypeOf(date).toEqualTypeOf<Date>();
+      if (false) {
+        // @ts-expect-error class instances do not receive definition fields
+        date.code;
+      }
+      return date.toISOString();
+    });
+
+    expectTypeOf(new InstanceError(undefined).createdAt).toEqualTypeOf<Date>();
+    expectTypeOf(new InstanceError(undefined).toJSON()).toEqualTypeOf<{
+      createdAt: Date;
+    }>();
+    expectTypeOf(new DateError(undefined).message).toBeString();
+  });
+
+  it('narrows with the standalone invariant on const classes', () => {
+    const createLookupError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'resourceId', resolve: ({ input }) => input },
+      message: ({ data, implementation }) => implementation(data),
+    });
+    const MissingResourceError = createLookupError({ code: 'missingResource' })
+      .defineContext(z.string())
+      .implement((resourceId) => `${resourceId} was not found`);
+    const requireResource = (resource: { id: string } | undefined) => {
+      invariant(MissingResourceError, resource, () => 'resource_123');
+      expectTypeOf(resource).toEqualTypeOf<{ id: string }>();
+    };
+
+    requireResource({ id: 'resource_123' });
+    if (false) {
+      // @ts-expect-error input must match the constructor input
+      invariant(MissingResourceError, true, 1);
+    }
+  });
+
+  it('requires wrapped input when constructor input is a function', () => {
+    const createCallbackError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'callback', resolve: ({ input }) => input },
+      message: ({ data, implementation }) => implementation(data),
+    });
+    class CallbackError extends createCallbackError({
+      code: 'callback',
+    }).implement((_callback: () => string) => 'callback failed') {}
+    const handler = () => 'value';
+
+    expectTypeOf(new CallbackError(handler).callback).toEqualTypeOf<
+      () => string
+    >();
+    if (false) {
+      // @ts-expect-error function constructor input keeps its call signature
+      new CallbackError({});
+      CallbackError.invariant(false, () => handler);
+      invariant(CallbackError, false, () => handler);
+      // @ts-expect-error a callback would be called as lazy input
+      CallbackError.invariant(false, handler);
+      // @ts-expect-error a callback would be called as lazy input
+      invariant(CallbackError, false, handler);
+    }
   });
 });

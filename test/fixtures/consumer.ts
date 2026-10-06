@@ -3,7 +3,9 @@ import { z } from 'zod';
 
 import {
   createError,
+  invariant,
   type CreateErrorConfig,
+  type ImplementOptions,
 } from '@jfdevelops/create-error';
 
 const reusableDefinition = z.object({ code: z.string() });
@@ -95,3 +97,65 @@ expectTypeOf(error.toJSON()).toEqualTypeOf<{
   scope: string;
 }>();
 expectTypeOf(error).toMatchTypeOf<InstanceType<typeof createConsumerError.Error>>();
+
+// README: "Use both options"
+const createValidationError = createError({
+  definition: z.object({
+    code: z.string(),
+    section: z.string(),
+  }),
+  data: {
+    property: 'context',
+    resolve: ({ definition, input }) => ({
+      ...input,
+      section: definition.section,
+    }),
+  },
+  message: ({ data, implementation }) => implementation(data),
+  properties: ({ definition }) => ({
+    code: definition.code,
+    section: definition.section,
+    describe: () => `${definition.code} in ${definition.section}`,
+  }),
+});
+
+class InvalidEmailError extends createValidationError({
+  code: 'invalidEmail',
+  section: 'profile',
+})
+  .defineContext(
+    z.object({
+      field: z.string(),
+      section: z.literal('profile'),
+    }),
+  )
+  .implement(({ field }) => `${field} is invalid`) {}
+
+expectTypeOf(new InvalidEmailError({ field: 'email' }).describe()).toBeString();
+
+// README: "Naming error classes" and the standalone invariant
+const createHttpError = createError({
+  definition: z.object({
+    code: z.enum(['notFound', 'unauthorized']),
+    scope: z.literal('request'),
+  }),
+  data: {
+    property: 'details',
+    resolve: ({ input }) => input,
+  },
+  message: ({ implementation, data }) => implementation(data),
+});
+
+const notFoundOptions: ImplementOptions = { name: 'NotFoundError' };
+const NotFoundError = createHttpError({ code: 'notFound', scope: 'request' })
+  .implement(
+    (details: { resource: string }) => details.resource,
+    notFoundOptions,
+  );
+
+function requireUser(user: { id: string } | undefined) {
+  invariant(NotFoundError, user, () => ({ resource: 'user' }));
+  expectTypeOf(user).toEqualTypeOf<{ id: string }>();
+}
+
+requireUser({ id: 'user_123' });

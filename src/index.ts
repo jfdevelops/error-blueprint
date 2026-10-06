@@ -1,2 +1,6 @@
-export { createError } from './create-error.js';
-export type { CreateErrorConfig } from './types.js';
+export { createError, invariant } from './create-error.js';
+export type {
+  CreateErrorConfig,
+  ImplementOptions,
+  InvariantInput,
+} from './types.js';
