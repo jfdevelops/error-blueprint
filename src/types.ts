@@ -88,6 +88,17 @@ export interface BlueprintConfig<Schema extends StandardSchemaV1> {
    * Use `resolve` to normalize input or combine it with the concrete
    * definition. The resulting value is validated by `defineContext`, when
    * present, and then stored under `property` on every error instance.
+   *
+   * @example Preserve input while adding a definition value
+   * ```ts
+   * data: {
+   *   property: 'context',
+   *   resolve: ({ definition, input }) => ({
+   *     ...input,
+   *     scope: definition.scope,
+   *   }),
+   * }
+   * ```
    */
   data: {
     /**
@@ -119,6 +130,15 @@ export interface BlueprintConfig<Schema extends StandardSchemaV1> {
    * resolved data, or attach convenience methods. It does not transform or
    * validate constructor input; use `data.resolve` and `defineContext` for
    * that.
+   *
+   * @example Expose definition and resolved-data values
+   * ```ts
+   * properties: ({ definition, data }) => ({
+   *   code: definition.code,
+   *   context: data,
+   *   describe: () => `${definition.code}: ${data.field}`,
+   * })
+   * ```
    */
   properties?(context: BlueprintContext<Schema>): object;
 
@@ -128,6 +148,16 @@ export interface BlueprintConfig<Schema extends StandardSchemaV1> {
    *
    * The callback receives the fully constructed error, including the data
    * property and any fields or methods returned by `properties`.
+   *
+   * @example Return an API-safe error representation
+   * ```ts
+   * toJSON: (error) => ({
+   *   name: error.name,
+   *   code: error.code,
+   *   message: error.message,
+   *   context: error.context,
+   * })
+   * ```
    */
   toJSON?(error: Error & Record<string, unknown>): unknown;
 }
@@ -309,6 +339,17 @@ interface ErrorClassStatics {
    * A function can be supplied as `input` to avoid constructing error data
    * unless the invariant fails. TypeScript narrows `condition` after a
    * successful call.
+   *
+   * @example
+   * ```ts
+   * MissingUserError.invariant(
+   *   user,
+   *   () => ({ userId }),
+   *   { cause },
+   * );
+   *
+   * user.id; // narrowed to the truthy branch
+   * ```
    */
   invariant<Condition, Input>(
     this: new (input: Input, options?: ErrorOptions) => Error,
@@ -377,6 +418,15 @@ export interface ImplementationBuilder<
    * The callback receives the single argument chosen by the blueprint's call
    * to `implementation(argument)`. When that argument is a plain object, the
    * concrete definition's fields are also available on it.
+   *
+   * @example
+   * ```ts
+   * const MissingUserError = createRequestError({
+   *   code: 'missingUser',
+   * }).implement(
+   *   ({ code, context }) => `${code}: ${context.userId} was not found`,
+   * );
+   * ```
    */
   implement<InferredData = DefaultBuilderData<Data>>(
     implementation: Expand<ImplementationCallback<
@@ -403,6 +453,15 @@ export interface ErrorDefinitionBuilder<
    * The schema's input becomes the concrete class's constructor input and its
    * output becomes the stored data and implementation value. Validation must
    * be synchronous. After selecting a schema, only `implement` is available.
+   *
+   * @example
+   * ```ts
+   * const MissingUserError = createRequestError({ code: 'missingUser' })
+   *   .defineContext(z.object({ userId: z.string() }))
+   *   .implement(({ userId }) => `User ${userId} was not found`);
+   *
+   * new MissingUserError({ userId: 'user_123' });
+   * ```
    */
   defineContext<const ContextSchema extends StandardSchemaV1>(
     context: ContextSchema,
@@ -424,6 +483,14 @@ export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
   /**
    * Parses and captures a concrete definition while preserving compatible
    * literal values in the resulting error class.
+   *
+   * @example
+   * ```ts
+   * const builder = createRequestError({
+   *   code: 'missingUser',
+   *   scope: 'request',
+   * });
+   * ```
    */
   <const Definition extends DefinitionInput<Schema>>(
     definition: ExactDefinition<DefinitionInput<Schema>, Definition>,
@@ -431,6 +498,11 @@ export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
 
   /**
    * The shared native `Error` base for every class created by this factory.
+   *
+   * @example
+   * ```ts
+   * error instanceof createRequestError.Error;
+   * ```
    */
   Error: FamilyErrorClass;
 };
