@@ -141,12 +141,16 @@ export interface CreateErrorConfig<Schema extends StandardSchemaV1> {
    * validate constructor input; use `data.resolve` and `defineContext` for
    * that.
    *
+   * `data` is typed separately by each concrete error, so the blueprint can
+   * pass it along but cannot read its fields. Use `definition` values or the
+   * `implementation` callback for anything derived from it.
+   *
    * @example Expose definition and resolved-data values
    * ```ts
-   * properties: ({ definition, data }) => ({
+   * properties: ({ definition, data, implementation }) => ({
    *   code: definition.code,
    *   context: data,
-   *   describe: () => `${definition.code}: ${data.field}`,
+   *   describe: () => `${definition.code}: ${implementation(data)}`,
    * })
    * ```
    */
@@ -187,7 +191,9 @@ type InjectedDefinitionKeys<Template> = {
     : never;
 }[keyof Template];
 
-type ConstructorInput<Config, Data> = Data extends readonly unknown[]
+type ConstructorInput<Config, Data> = Data extends
+  | readonly unknown[]
+  | ((...arguments_: never[]) => unknown)
   ? Data
   : Data extends object
     ? Omit<
@@ -210,6 +216,21 @@ type ReplaceTuple<
   >;
 };
 
+/**
+ * Built-in class instances that are never plain objects. Templates are not
+ * expanded inside them, and they never receive definition fields.
+ */
+type OpaqueObject =
+  | Date
+  | RegExp
+  | ReadonlyMap<unknown, unknown>
+  | ReadonlySet<unknown>
+  | WeakMap<object, unknown>
+  | WeakSet<object>
+  | PromiseLike<unknown>
+  | ArrayBuffer
+  | ArrayBufferView;
+
 type ReplaceTemplate<Type, Definition, Data, Implementation> =
   Type extends TypeSlot<'definition', infer Key>
     ? Key extends keyof Definition
@@ -219,27 +240,29 @@ type ReplaceTemplate<Type, Definition, Data, Implementation> =
       ? Data
       : Type extends TypeSlot<'implementation'>
         ? Implementation
-        : Type extends (...arguments_: infer Arguments) => infer Result
-          ? (
-              ...arguments_: ReplaceTuple<
-                Arguments,
-                Definition,
-                Data,
-                Implementation
-              >
-            ) => ReplaceTemplate<Result, Definition, Data, Implementation>
-          : Type extends readonly unknown[]
-            ? ReplaceTuple<Type, Definition, Data, Implementation>
-            : Type extends object
-              ? {
-                  [Key in keyof Type]: ReplaceTemplate<
-                    Type[Key],
-                    Definition,
-                    Data,
-                    Implementation
-                  >;
-                }
-              : Type;
+        : Type extends OpaqueObject
+          ? Type
+          : Type extends (...arguments_: infer Arguments) => infer Result
+            ? (
+                ...arguments_: ReplaceTuple<
+                  Arguments,
+                  Definition,
+                  Data,
+                  Implementation
+                >
+              ) => ReplaceTemplate<Result, Definition, Data, Implementation>
+            : Type extends readonly unknown[]
+              ? ReplaceTuple<Type, Definition, Data, Implementation>
+              : Type extends object
+                ? {
+                    [Key in keyof Type]: ReplaceTemplate<
+                      Type[Key],
+                      Definition,
+                      Data,
+                      Implementation
+                    >;
+                  }
+                : Type;
 
 type PropertiesTemplate<Config> = Config extends {
   properties: (...arguments_: infer _Arguments) => infer Properties;
@@ -297,7 +320,7 @@ type ImplementationArgumentWithDefinition<Argument, Definition, Data> =
     : ReplaceTemplate<Argument, Definition, Data, never> extends infer Resolved
       ? Argument extends TypeSlot<string, unknown>
         ? Resolved
-        : Resolved extends readonly unknown[]
+        : Resolved extends OpaqueObject | readonly unknown[]
           ? Resolved
           : Resolved extends (...arguments_: infer _Arguments) => unknown
             ? Resolved
@@ -332,6 +355,17 @@ type PassedImplementationCallback<Config, Definition, Data> = (
   argument: PassedImplementationArgument<Config, Definition, Data>,
 ) => string;
 
+/**
+ * Input accepted by `invariant`: the constructor input, or a function that
+ * returns it. When the constructor input can itself be a function, only the
+ * wrapped form is accepted so a callback is never mistaken for a lazy input.
+ */
+export type InvariantInput<Input> = ExtendsNever<
+  Extract<Input, (...arguments_: never[]) => unknown>,
+  Input | (() => Input),
+  () => Input
+>;
+
 interface ErrorClassStatics {
   /**
    * Throws this error class when `condition` is falsy.
@@ -339,6 +373,10 @@ interface ErrorClassStatics {
    * A function can be supplied as `input` to avoid constructing error data
    * unless the invariant fails. TypeScript narrows `condition` after a
    * successful call.
+   *
+   * TypeScript only allows assertion calls through explicitly typed names, so
+   * call this on a `class` declaration. For a class stored in a `const`, use
+   * the standalone {@link invariant} function instead.
    *
    * @example
    * ```ts
@@ -354,10 +392,24 @@ interface ErrorClassStatics {
   invariant<Condition, Input>(
     this: new (input: Input, options?: ErrorOptions) => Error,
     condition: Condition,
-    input: Input | (() => Input),
+    input: InvariantInput<Input>,
     options?: ErrorOptions,
   ): asserts condition;
 }
+
+/**
+ * The instance type shared by every error in one family.
+ *
+ * Definition-derived fields use the schema's general output type, and the data
+ * property is `unknown` because each concrete error types its own data.
+ */
+export type FamilyError<Schema extends StandardSchemaV1, Config> =
+  InstanceProperties<
+    Config,
+    ConcreteDefinition<Schema>,
+    unknown,
+    (argument: never) => string
+  >;
 
 /**
  * The shared native `Error` base created for one blueprint.
@@ -365,9 +417,9 @@ interface ErrorClassStatics {
  * Use `factory.Error` for family-wide `instanceof` checks or as a public base
  * type for errors created by the same blueprint.
  */
-export type FamilyErrorClass = (abstract new (
+export type FamilyErrorClass<Instance extends Error = Error> = (abstract new (
   ...arguments_: never[]
-) => Error) &
+) => Instance) &
   ErrorClassStatics;
 
 /** An extendable concrete error class produced by a configured factory. */
@@ -405,6 +457,19 @@ type Expand<Type> = Type extends (...arguments_: infer Arguments) => infer Resul
   ? (...arguments_: Arguments) => Result
   : Type;
 
+/** Options for a concrete error class created by `implement`. */
+export interface ImplementOptions {
+  /**
+   * The class name, used for `error.name` and stack traces.
+   *
+   * Classes assigned to a variable have no name of their own, so set this
+   * when you use `const NotFoundError = factory(...).implement(...)`. A named
+   * subclass, such as `class NotFoundError extends ... {}`, uses its own name
+   * instead.
+   */
+  name?: string;
+}
+
 /** Captures the final behavior for one concrete error class. */
 export interface ImplementationBuilder<
   Config,
@@ -421,10 +486,12 @@ export interface ImplementationBuilder<
    *
    * @example
    * ```ts
+   * // The blueprint's message calls `implementation({ context: data })`.
    * const MissingUserError = createRequestError({
    *   code: 'missingUser',
    * }).implement(
    *   ({ code, context }) => `${code}: ${context.userId} was not found`,
+   *   { name: 'MissingUserError' },
    * );
    * ```
    */
@@ -434,6 +501,7 @@ export interface ImplementationBuilder<
       Definition,
       BuilderData<Data, InferredData>
     >>,
+    options?: ImplementOptions,
   ): ImplementedErrorClass<
     Config,
     Definition,
@@ -504,5 +572,23 @@ export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
    * error instanceof createRequestError.Error;
    * ```
    */
-  Error: FamilyErrorClass;
+  Error: FamilyErrorClass<FamilyError<Schema, Config>>;
+
+  /**
+   * Checks whether `value` was created by any class in this family, narrowing
+   * it to the fields every family error shares.
+   *
+   * This is an `instanceof factory.Error` check, so errors from another copy
+   * of the factory, such as one loaded in a different realm, do not match.
+   *
+   * @example
+   * ```ts
+   * catch (error) {
+   *   if (createRequestError.is(error)) {
+   *     error.code; // string
+   *   }
+   * }
+   * ```
+   */
+  is(value: unknown): value is FamilyError<Schema, Config>;
 };

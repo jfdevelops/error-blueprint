@@ -131,8 +131,10 @@ scalar, tuple, object, or class-instance shape.
 
 The `definition` option must implement Standard Schema V1 and must produce an
 object. Validation runs when `factory(definition)` is called. Because class
-creation is synchronous, a schema whose `validate` method returns a promise is
-rejected with a `TypeError`.
+creation is synchronous, a schema whose `validate` method returns a promise or
+other thenable is rejected with a `TypeError`. `createError` also checks that
+`data.resolve`, `message`, and any `properties` or `toJSON` options are
+functions.
 
 ## What `data` and `properties` do
 
@@ -143,9 +145,11 @@ values. After optional `defineContext` validation, the final value is stored on
 the instance using `data.property`.
 
 `properties` defines the rest of the instance API. It can expose definition
-values such as a stable error code, derive fields from the resolved data, or add
+values such as a stable error code, pass the resolved data through, or add
 methods and getters. It does not participate in input validation or
-transformation.
+transformation. Because each concrete error types its data separately, the
+blueprint can store `data` but cannot read its fields; derive values from
+`definition` or call `implementation(data)` instead.
 
 For a small error family, the constructor input can pass straight through and
 `properties` can be omitted entirely:
@@ -188,7 +192,7 @@ const createValidationError = createError({
   properties: ({ definition, data }) => ({
     code: definition.code,
     section: definition.section,
-    describe: () => `${definition.code} in ${data.section}`,
+    describe: () => `${definition.code} in ${definition.section}`,
   }),
 });
 
@@ -230,7 +234,25 @@ const NotFoundError = createHttpError({
   scope: 'request',
 })
   .defineContext(z.object({ resource: z.string() }))
-  .implement((details) => `${details.resource} was not found`);
+  .implement((details) => `${details.resource} was not found`, {
+    name: 'NotFoundError',
+  });
+```
+
+## Naming error classes
+
+A class declared with `class NotFoundError extends ... {}` uses its own name for
+`error.name`, stack traces, and serialized output. A class assigned to a
+variable has no name of its own, so pass `name` as the second argument to
+`implement`. Without either, instances keep the native `"Error"` name.
+
+```ts
+const NotFoundError = createHttpError({ code: 'notFound', scope: 'request' })
+  .implement((details: { resource: string }) => details.resource, {
+    name: 'NotFoundError',
+  });
+
+new NotFoundError({ resource: 'user' }).name; // "NotFoundError"
 ```
 
 ## Data and behavior
@@ -253,8 +275,33 @@ Exceptions thrown by a schema or callback are not wrapped. Native `Error`
 behavior is preserved, including stack traces, subclass names, prototypes, and
 the optional `cause` passed as the second constructor argument.
 
-Every family exposes its shared base as `factory.Error`. Concrete classes and
-named subclasses also inherit a lazy invariant helper:
+Only plain objects passed to `implementation(argument)` receive the definition
+fields. Class instances, such as a `Date` or `Map`, are passed through
+unchanged. The types recognize common built-in classes, but they cannot tell
+your own class instances from plain objects, so wrap those in an object, as in
+`implementation({ user })`, when the implementation needs definition fields.
+
+Every family exposes its shared base as `factory.Error`, and `factory.is(value)`
+checks whether a value came from any class in the family. Both narrow to the
+fields every family error shares: definition-derived properties use the
+schema's output type, and the data property is `unknown`.
+
+```ts
+try {
+  await saveForm();
+} catch (error) {
+  if (createFormError.is(error)) {
+    error.code; // string
+    error.context; // unknown
+  }
+}
+```
+
+`is` is an `instanceof` check, so errors created by another copy of the
+factory, such as one loaded in a different realm, do not match. To name the
+shared instance type, use `InstanceType<typeof createFormError.Error>`.
+
+Concrete classes and named subclasses also inherit a lazy invariant helper:
 
 ```ts
 InvalidFieldError.invariant(
@@ -264,7 +311,19 @@ InvalidFieldError.invariant(
 );
 ```
 
-The input function runs only when the condition is falsy.
+The input function runs only when the condition is falsy. TypeScript only
+allows assertion methods on explicitly typed names, so the static method works
+on `class` declarations. For a class stored in a `const`, use the standalone
+`invariant` export, which narrows the same way:
+
+```ts
+import { invariant } from '@jfdevelops/create-error';
+
+invariant(NotFoundError, user, () => ({ resource: 'user' }));
+```
+
+When an error's constructor input is itself a function, pass it wrapped, as in
+`() => handler`, so it is not mistaken for lazy input. The types enforce this.
 
 When `toJSON` is configured, it is installed once on the family prototype and
 used by `JSON.stringify`. Its callback can read native error fields, configured

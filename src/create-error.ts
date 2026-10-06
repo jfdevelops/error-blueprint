@@ -5,6 +5,8 @@ import type {
   BlueprintErrorTemplate,
   CreateErrorConfig,
   ErrorFamilyFactory,
+  ImplementOptions,
+  InvariantInput,
 } from './types.js';
 
 type RuntimeImplementation = (argument: unknown) => string;
@@ -71,6 +73,10 @@ function isObjectLike(value: unknown): value is object {
   );
 }
 
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return isObjectLike(value) && typeof Reflect.get(value, 'then') === 'function';
+}
+
 function isPlainObject(value: unknown): value is Record<PropertyKey, unknown> {
   if (!isObjectLike(value)) {
     return false;
@@ -109,8 +115,27 @@ function validateStandardSchema(schema: unknown, subject: string) {
   }
 }
 
+function validateCallback(value: unknown, subject: string, optional = false) {
+  if (optional && value === undefined) {
+    return;
+  }
+
+  if (typeof value !== 'function') {
+    throw new TypeError(`${subject} must be a function`);
+  }
+}
+
 function validateBlueprint(config: CreateErrorConfig<StandardSchemaV1>) {
   validateStandardSchema(config.definition, 'definition');
+
+  if (!isObjectLike(config.data)) {
+    throw new TypeError('data must be an object');
+  }
+
+  validateCallback(config.data.resolve, 'data.resolve');
+  validateCallback(config.message, 'message');
+  validateCallback(config.properties, 'properties', true);
+  validateCallback(config.toJSON, 'toJSON', true);
 
   if (
     typeof config.data.property !== 'string' ||
@@ -145,7 +170,7 @@ function parseSchema<Schema extends StandardSchemaV1>(
 ) {
   const result = schema['~standard'].validate(input);
 
-  if (result instanceof Promise) {
+  if (isPromiseLike(result)) {
     throw new TypeError(`${subject} schema validation must be synchronous`);
   }
 
@@ -199,6 +224,49 @@ function assignProperties(
 
     Object.defineProperty(error, key, descriptor);
   }
+}
+
+function throwUnless<Input>(
+  ErrorClass: new (input: Input, options?: ErrorOptions) => Error,
+  condition: unknown,
+  input: InvariantInput<Input>,
+  options: ErrorOptions | undefined,
+) {
+  if (condition) {
+    return;
+  }
+
+  const resolvedInput =
+    typeof input === 'function' ? (input as () => Input)() : (input as Input);
+
+  throw new ErrorClass(resolvedInput, options);
+}
+
+/**
+ * Throws `ErrorClass` when `condition` is falsy.
+ *
+ * Works like the static `ErrorClass.invariant`, but can also be used with
+ * classes stored in a `const`, where TypeScript does not allow assertion
+ * methods. A function can be supplied as `input` to avoid constructing error
+ * data unless the invariant fails.
+ *
+ * @example
+ * ```ts
+ * const MissingUserError = createRequestError({ code: 'missingUser' })
+ *   .implement(({ code }) => `${code}: user was not found`);
+ *
+ * invariant(MissingUserError, user, () => ({ userId }));
+ *
+ * user.id; // narrowed to the truthy branch
+ * ```
+ */
+export function invariant<Condition, Input>(
+  ErrorClass: new (input: Input, options?: ErrorOptions) => Error,
+  condition: Condition,
+  input: InvariantInput<Input>,
+  options?: ErrorOptions,
+): asserts condition {
+  throwUnless(ErrorClass, condition, input, options);
 }
 
 /**
@@ -324,17 +392,10 @@ export function createError<
     static invariant<Condition, Input>(
       this: new (input: Input, options?: ErrorOptions) => Error,
       condition: Condition,
-      input: Input | (() => Input),
+      input: InvariantInput<Input>,
       options?: ErrorOptions,
     ): asserts condition {
-      if (condition) {
-        return;
-      }
-
-      const resolvedInput =
-        typeof input === 'function' ? (input as () => Input)() : input;
-
-      throw new this(resolvedInput, options);
+      throwUnless(this, condition, input, options);
     }
 
     constructor(message: string, options?: ErrorOptions) {
@@ -363,9 +424,18 @@ export function createError<
 
     function createImplementation(
       implementation: RuntimeImplementation,
+      options: ImplementOptions | undefined,
       contextSchema?: StandardSchemaV1,
     ) {
-      return class extends FamilyError {
+      validateCallback(implementation, 'implementation');
+
+      const name = options?.name;
+
+      if (name !== undefined && (typeof name !== 'string' || name.length === 0)) {
+        throw new TypeError('name must be a non-empty string');
+      }
+
+      const ImplementedError = class extends FamilyError {
         constructor(input: unknown, options?: ErrorOptions) {
           const resolvedData = config.data.resolve({
             definition: parsedDefinition,
@@ -413,10 +483,22 @@ export function createError<
           }
         }
       };
+
+      // Replace the name inferred from the local binding; unnamed classes fall
+      // back to the native "Error" name.
+      Object.defineProperty(ImplementedError, 'name', {
+        configurable: true,
+        value: name ?? '',
+      });
+
+      return ImplementedError;
     }
 
-    function implement(implementation: RuntimeImplementation) {
-      return createImplementation(implementation);
+    function implement(
+      implementation: RuntimeImplementation,
+      options?: ImplementOptions,
+    ) {
+      return createImplementation(implementation, options);
     }
 
     function defineContext<ContextSchema extends StandardSchemaV1>(
@@ -425,8 +507,11 @@ export function createError<
       validateStandardSchema(contextSchema, 'context');
 
       return {
-        implement(implementation: RuntimeImplementation) {
-          return createImplementation(implementation, contextSchema);
+        implement(
+          implementation: RuntimeImplementation,
+          options?: ImplementOptions,
+        ) {
+          return createImplementation(implementation, options, contextSchema);
         },
       };
     }
@@ -439,5 +524,6 @@ export function createError<
 
   return Object.assign(createDefinition, {
     Error: FamilyError,
+    is: (value: unknown) => value instanceof FamilyError,
   }) as unknown as ErrorFamilyFactory<Schema, typeof config>;
 }
