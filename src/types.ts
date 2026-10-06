@@ -1,10 +1,14 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
-declare const dataPlaceholderBrand: unique symbol;
-declare const definitionFieldBrand: unique symbol;
-declare const implementationArgumentBrand: unique symbol;
-declare const implementationPlaceholderBrand: unique symbol;
-declare const inputPlaceholderBrand: unique symbol;
+declare const typeSlot: unique symbol;
+
+/** Marks a blueprint value that is resolved by a later builder stage. */
+type TypeSlot<Kind extends string, Payload = never> = {
+  readonly [typeSlot]: {
+    readonly kind: Kind;
+    readonly payload: Payload;
+  };
+};
 
 type DefinitionInput<Schema extends StandardSchemaV1> =
   StandardSchemaV1.InferInput<Schema>;
@@ -16,12 +20,11 @@ type ExactDefinition<Input, Definition> = Input extends object
   ? Definition & Record<Exclude<keyof Definition, keyof Input>, never>
   : Definition;
 
-type DefinitionPlaceholder<Schema extends StandardSchemaV1> =
+type DefinitionTemplate<Schema extends StandardSchemaV1> =
   DefinitionOutput<Schema> extends object
     ? {
-        readonly [Key in keyof DefinitionOutput<Schema>]: DefinitionOutput<Schema>[Key] & {
-          readonly [definitionFieldBrand]: Key;
-        };
+        readonly [Key in keyof DefinitionOutput<Schema>]: DefinitionOutput<Schema>[Key] &
+          TypeSlot<'definition', Key>;
       }
     : never;
 
@@ -36,30 +39,23 @@ type ConcreteDefinition<Schema extends StandardSchemaV1, Input> =
       }
     : never;
 
-interface DataPlaceholder {
-  readonly [dataPlaceholderBrand]: true;
-}
+type DataSlot = TypeSlot<'data'>;
 
-interface InputPlaceholder {
-  readonly [inputPlaceholderBrand]: true;
-}
-
-type ImplementationPlaceholder = {
-  <const Argument>(argument: Argument): string & {
-    readonly [implementationArgumentBrand]: Argument;
-  };
-  readonly [implementationPlaceholderBrand]: true;
+type ImplementationSlot = TypeSlot<'implementation'> & {
+  <const Argument>(
+    argument: Argument,
+  ): string & TypeSlot<'implementationArgument', Argument>;
 };
 
 export interface BlueprintContext<Schema extends StandardSchemaV1> {
-  definition: DefinitionPlaceholder<Schema>;
-  data: DataPlaceholder;
-  implementation: ImplementationPlaceholder;
+  definition: DefinitionTemplate<Schema>;
+  data: DataSlot;
+  implementation: ImplementationSlot;
 }
 
 export interface ResolveContext<Schema extends StandardSchemaV1> {
-  definition: DefinitionPlaceholder<Schema>;
-  input: InputPlaceholder;
+  definition: DefinitionTemplate<Schema>;
+  input: object;
 }
 
 /** Configuration used to create one related family of error classes. */
@@ -94,9 +90,10 @@ type ResolveTemplate<Config> = Config extends {
   : never;
 
 type InjectedDefinitionKeys<Template> = {
-  [Key in keyof Template]: Template[Key] extends {
-    readonly [definitionFieldBrand]: PropertyKey;
-  }
+  [Key in keyof Template]: Template[Key] extends TypeSlot<
+    'definition',
+    PropertyKey
+  >
     ? Key
     : never;
 }[keyof Template];
@@ -124,39 +121,38 @@ type ReplaceTuple<
   >;
 };
 
-type ReplaceTemplate<Type, Definition, Data, Implementation> = Type extends {
-  readonly [definitionFieldBrand]: infer Key;
-}
+type ReplaceTemplate<Type, Definition, Data, Implementation> = Type extends TypeSlot<
+  'definition',
+  infer Key
+>
   ? Key extends keyof Definition
     ? Definition[Key]
     : never
-  : Type extends { readonly [dataPlaceholderBrand]: true }
+  : Type extends TypeSlot<'data'>
     ? Data
-    : Type extends { readonly [implementationPlaceholderBrand]: true }
+    : Type extends TypeSlot<'implementation'>
       ? Implementation
-      : Type extends { readonly [inputPlaceholderBrand]: true }
-        ? ConstructorInput<unknown, Data>
-        : Type extends (...arguments_: infer Arguments) => infer Result
-          ? (
-              ...arguments_: ReplaceTuple<
-                Arguments,
-                Definition,
-                Data,
-                Implementation
-              >
-            ) => ReplaceTemplate<Result, Definition, Data, Implementation>
-          : Type extends readonly unknown[]
-            ? ReplaceTuple<Type, Definition, Data, Implementation>
-            : Type extends object
-              ? {
-                  [Key in keyof Type]: ReplaceTemplate<
-                    Type[Key],
-                    Definition,
-                    Data,
-                    Implementation
-                  >;
-                }
-              : Type;
+      : Type extends (...arguments_: infer Arguments) => infer Result
+        ? (
+            ...arguments_: ReplaceTuple<
+              Arguments,
+              Definition,
+              Data,
+              Implementation
+            >
+          ) => ReplaceTemplate<Result, Definition, Data, Implementation>
+        : Type extends readonly unknown[]
+          ? ReplaceTuple<Type, Definition, Data, Implementation>
+          : Type extends object
+            ? {
+                [Key in keyof Type]: ReplaceTemplate<
+                  Type[Key],
+                  Definition,
+                  Data,
+                  Implementation
+                >;
+              }
+            : Type;
 
 type PropertiesTemplate<Config> = Config extends {
   properties: (...arguments_: infer _Arguments) => infer Properties;
@@ -167,7 +163,7 @@ type PropertiesTemplate<Config> = Config extends {
 type DataPropertyTemplate<Config> = Config extends {
   data: { property: infer Property extends string };
 }
-  ? { [Key in Property]: DataPlaceholder }
+  ? { [Key in Property]: DataSlot }
   : object;
 
 export type BlueprintErrorTemplate<Config> = Error &
@@ -202,9 +198,10 @@ type MessageTemplate<Config> = Config extends {
   : string;
 
 type ImplementationArgument<Config, Definition, Data> =
-  MessageTemplate<Config> extends {
-    readonly [implementationArgumentBrand]: infer Argument;
-  }
+  MessageTemplate<Config> extends TypeSlot<
+    'implementationArgument',
+    infer Argument
+  >
     ? ReplaceTemplate<Argument, Definition, Data, never>
     : never;
 
