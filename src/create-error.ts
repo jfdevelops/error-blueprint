@@ -286,8 +286,8 @@ export function createError<
  * Creates a configurable family of strongly typed error classes.
  *
  * Callback execution order is `data.resolve`, optional context validation,
- * `message`, then `properties`. Definition literals and constructor data are
- * inferred without explicit generic arguments or `as const`.
+ * `message`, then `properties`. Parsed definition output and constructor data
+ * are inferred without explicit generic arguments or `as const`.
  *
  * @param config Defines the family's schema, data lifecycle, message, and
  * optional public properties.

@@ -18,6 +18,19 @@ const reusableConfig = {
 
 createError(reusableConfig);
 
+const createLookupError = createError({
+  definition: z.object({ code: z.string() }),
+  data: { property: 'resourceId', resolve: ({ input }) => input },
+  message: ({ data, implementation }) => implementation(data),
+});
+const MissingResourceError = createLookupError({
+  code: 'missingResource',
+})
+  .defineContext(z.string())
+  .implement((resourceId) => `${resourceId} was not found`);
+
+expectTypeOf(new MissingResourceError('resource_123').resourceId).toBeString();
+
 const createConsumerError = createError({
   definition: z.object({
     code: z.string(),
@@ -66,19 +79,19 @@ class ConsumerError extends createConsumerError({
 
 const error = new ConsumerError({ value: 'working' });
 
-expectTypeOf(error.code).toEqualTypeOf<'consumer'>();
-expectTypeOf(error.scope).toEqualTypeOf<'package'>();
+expectTypeOf(error.code).toBeString();
+expectTypeOf(error.scope).toBeString();
 expectTypeOf(error.context).toEqualTypeOf<{
   scope: 'package';
   value: string;
 }>();
 expectTypeOf(error.toJSON()).toEqualTypeOf<{
-  code: 'consumer';
+  code: string;
   context: {
     scope: 'package';
     value: string;
   };
   message: string;
-  scope: 'package';
+  scope: string;
 }>();
 expectTypeOf(error).toMatchTypeOf<InstanceType<typeof createConsumerError.Error>>();

@@ -61,8 +61,8 @@ describe('public inference contract', () => {
       }),
     )
     .implement(({ code, context, scope }) => {
-      expectTypeOf(code).toEqualTypeOf<'invalidField'>();
-      expectTypeOf(scope).toEqualTypeOf<'field'>();
+      expectTypeOf(code).toBeString();
+      expectTypeOf(scope).toBeString();
       expectTypeOf(context).toEqualTypeOf<{
         field: string;
         scope: 'field';
@@ -73,26 +73,26 @@ describe('public inference contract', () => {
   it('preserves definition, data, input, and configured property types', () => {
     const error = new InvalidFieldError({ field: 'email' });
 
-    expectTypeOf(error.code).toEqualTypeOf<'invalidField'>();
-    expectTypeOf(error.scope).toEqualTypeOf<'field'>();
+    expectTypeOf(error.code).toBeString();
+    expectTypeOf(error.scope).toBeString();
     expectTypeOf(error.context).toEqualTypeOf<{
       scope: 'field';
       field: string;
     }>();
     expectTypeOf(error.toJSON()).toEqualTypeOf<{
-      code: 'invalidField';
+      code: string;
       context: {
         scope: 'field';
         field: string;
       };
       message: string;
       name: string;
-      scope: 'field';
+      scope: string;
     }>();
     expectTypeOf(error).toMatchTypeOf<InstanceType<typeof createDomainError.Error>>();
 
     error.renderMessage(({ context, scope }) => {
-      expectTypeOf(scope).toEqualTypeOf<'field'>();
+      expectTypeOf(scope).toBeString();
       expectTypeOf(context.field).toBeString();
       return context.field;
     });
@@ -145,6 +145,28 @@ describe('public inference contract', () => {
     }
   });
 
+  it('uses transformed definition output instead of input literals', () => {
+    const createTransformedError = createError({
+      definition: z.object({ code: z.string() }).transform(({ code }) => ({
+        code: code.toUpperCase(),
+      })),
+      data: { property: 'data', resolve: ({ input }) => input },
+      message: () => 'transformed',
+      properties: ({ definition }) => ({ code: definition.code }),
+    });
+    const TransformedError = createTransformedError({
+      code: 'mixedCase',
+    }).implement(() => 'transformed');
+    const error = new TransformedError(undefined);
+
+    expectTypeOf(error.code).toBeString();
+    if (false) {
+      // @ts-expect-error parsed output is not the original input literal
+      const inputCode: 'mixedCase' = error.code;
+      expectTypeOf(inputCode).toEqualTypeOf<'mixedCase'>();
+    }
+  });
+
   it('supports non-object data without widening it', () => {
     const definition = z.object({ code: z.string() });
 
@@ -152,7 +174,6 @@ describe('public inference contract', () => {
       definition,
       data: { property: 'data', resolve: ({ input }) => input },
       message: ({ implementation, data }) => implementation(data),
-      properties: ({ data }) => ({ data }),
     });
     const ScalarError = createScalarError({ code: 'scalar' })
       .defineContext(z.string())

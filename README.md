@@ -84,9 +84,9 @@ error instanceof Error; // true
 error instanceof FormError; // true
 ```
 
-No explicit generic arguments or `as const` assertions are needed. Concrete
-definition values remain literals when they are compatible with the schema's
-parsed output.
+No explicit generic arguments or `as const` assertions are needed. Definition
+inputs are checked by the schema, and definition-derived fields use its parsed
+output type so transformations remain type-safe.
 
 For reusable or separately declared configurations, the package exports a
 common `CreateErrorConfig` type:
@@ -269,7 +269,7 @@ The input function runs only when the condition is falsy.
 When `toJSON` is configured, it is installed once on the family prototype and
 used by `JSON.stringify`. Its callback can read native error fields, configured
 properties, and the resolved data property; each concrete error's `toJSON()`
-return type preserves its definition literals and context-schema output. When
+return type preserves parsed definition output and context-schema output. When
 omitted, the family does not add a `toJSON` method.
 
 ## Property safety
