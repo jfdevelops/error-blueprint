@@ -49,10 +49,14 @@ describe('definition schema', () => {
   });
 
   it('uses the parsed schema output in blueprint callbacks', () => {
-    const definition = z.object({ code: z.string() }).transform((input) => ({
-      code: input.code,
-      normalizedCode: input.code.toUpperCase(),
-    }));
+    const definition = z.object({ code: z.string() }).transform((input) => {
+      const normalizedCode = input.code.toUpperCase();
+
+      return {
+        code: normalizedCode,
+        normalizedCode,
+      };
+    });
     const createConfiguredError = createError({
       definition,
       data: { property: 'data', resolve: ({ input }) => input },
@@ -67,7 +71,7 @@ describe('definition schema', () => {
     }).implement(() => 'configured');
     const error = new ConfiguredError(undefined);
 
-    expect(error.code).toBe('mixedCase');
+    expect(error.code).toBe('MIXEDCASE');
     expect(error.normalizedCode).toBe('MIXEDCASE');
   });
 });

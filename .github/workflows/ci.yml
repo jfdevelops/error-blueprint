@@ -38,7 +38,11 @@ jobs:
 
       - name: Report test results
         uses: dorny/test-reporter@v1
-        if: (success() || failure()) && hashFiles('test-results.xml') != ''
+        if: >-
+          (success() || failure()) &&
+          hashFiles('test-results.xml') != '' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
         with:
           name: Tests
           path: test-results.xml

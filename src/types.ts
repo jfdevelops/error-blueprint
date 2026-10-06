@@ -28,14 +28,10 @@ type DefinitionTemplate<Schema extends StandardSchemaV1> =
       }
     : never;
 
-type ConcreteDefinition<Schema extends StandardSchemaV1, Input> =
+type ConcreteDefinition<Schema extends StandardSchemaV1> =
   DefinitionOutput<Schema> extends object
     ? {
-        readonly [Key in keyof DefinitionOutput<Schema>]: Key extends keyof Input
-          ? Input[Key] extends DefinitionOutput<Schema>[Key]
-            ? Input[Key]
-            : DefinitionOutput<Schema>[Key]
-          : DefinitionOutput<Schema>[Key];
+        readonly [Key in keyof DefinitionOutput<Schema>]: DefinitionOutput<Schema>[Key];
       }
     : never;
 
@@ -274,6 +270,12 @@ type InstanceProperties<Config, Definition, Data, Implementation> =
     Data,
     Implementation
   > &
+    ReplaceTemplate<
+      DataPropertyTemplate<Config>,
+      Definition,
+      Data,
+      Implementation
+    > &
     Error &
     (Config extends {
       toJSON: (...arguments_: infer _Arguments) => infer Json;
@@ -479,8 +481,8 @@ export interface ErrorDefinitionBuilder<
  */
 export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
   /**
-   * Parses and captures a concrete definition while preserving compatible
-   * literal values in the resulting error class.
+   * Parses and captures a concrete definition. Definition-derived fields use
+   * the schema's output type so transforms remain type-safe.
    *
    * @example
    * ```ts
@@ -492,7 +494,7 @@ export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
    */
   <const Definition extends DefinitionInput<Schema>>(
     definition: ExactDefinition<DefinitionInput<Schema>, Definition>,
-  ): ErrorDefinitionBuilder<Config, ConcreteDefinition<Schema, Definition>>;
+  ): ErrorDefinitionBuilder<Config, ConcreteDefinition<Schema>>;
 
   /**
    * The shared native `Error` base for every class created by this factory.
