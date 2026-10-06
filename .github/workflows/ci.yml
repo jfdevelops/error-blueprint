@@ -1,24 +1,59 @@
 name: CI
 
 on:
-  push:
-  pull_request:
-
-permissions:
-  contents: read
+  workflow_call:
 
 jobs:
-  check:
+  package:
+    name: Build & Test
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          version: 10.28.1
-      - uses: actions/setup-node@v4
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
         with:
-          node-version: 20.19.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Typecheck before building so declaration generation is not the only type gate.
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Run tests
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+        run: pnpm test --reporter=junit --outputFile=test-results.xml
+
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: (success() || failure()) && hashFiles('test-results.xml') != ''
+        with:
+          name: Tests
+          path: test-results.xml
+          reporter: java-junit
+
+      - name: Build package
+        run: pnpm run build
+
+      # Compile a real consumer against the built declarations and package exports.
+      - name: Typecheck package consumer
+        run: pnpm run test:package
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-build
+          path: dist
+          retention-days: 1
