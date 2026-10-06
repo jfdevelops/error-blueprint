@@ -7,7 +7,7 @@ import type {
   ErrorFamilyFactory,
 } from './types.js';
 
-type RuntimeImplementation = (...arguments_: never[]) => string;
+type RuntimeImplementation = (argument: unknown) => string;
 
 const protectedPropertyNames = new Set([
   'name',
@@ -22,6 +22,27 @@ function isObjectLike(value: unknown): value is object {
   return (
     value !== null && (typeof value === 'object' || typeof value === 'function')
   );
+}
+
+function isPlainObject(value: unknown): value is Record<PropertyKey, unknown> {
+  if (!isObjectLike(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
+}
+
+function includeDefinition(
+  argument: unknown,
+  definition: object,
+): unknown {
+  if (!isPlainObject(argument)) {
+    return argument;
+  }
+
+  return { ...definition, ...argument };
 }
 
 function validateStandardSchema(schema: unknown, subject: string) {
@@ -287,10 +308,18 @@ export function createError<
           const data = contextSchema
             ? parseSchema(contextSchema, resolvedData, 'context')
             : resolvedData;
+          const implementationWithDefinition: RuntimeImplementation = (
+            argument,
+          ) =>
+            implementation(
+              argument === data
+                ? argument
+                : includeDefinition(argument, parsedDefinition),
+            );
           const message = config.message({
             data,
             definition: parsedDefinition,
-            implementation,
+            implementation: implementationWithDefinition,
           } as never);
 
           super(message, options);
@@ -305,7 +334,7 @@ export function createError<
           const properties = config.properties?.({
             data,
             definition: parsedDefinition,
-            implementation,
+            implementation: implementationWithDefinition,
           } as never);
 
           if (properties) {

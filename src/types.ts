@@ -190,12 +190,27 @@ type MessageTemplate<Config> = Config extends {
   ? Message
   : string;
 
+type ImplementationArgumentWithDefinition<Argument, Definition, Data> =
+  Argument extends TypeSlot<'data'>
+    ? Data
+    : ReplaceTemplate<Argument, Definition, Data, never> extends infer Resolved
+      ? Argument extends TypeSlot<string, unknown>
+        ? Resolved
+        : Resolved extends readonly unknown[]
+          ? Resolved
+          : Resolved extends (...arguments_: infer _Arguments) => unknown
+            ? Resolved
+            : Resolved extends object
+              ? Omit<Definition, keyof Resolved> & Resolved
+              : Resolved
+      : never;
+
 type ImplementationArgument<Config, Definition, Data> =
   MessageTemplate<Config> extends TypeSlot<
     'implementationArgument',
     infer Argument
   >
-    ? ReplaceTemplate<Argument, Definition, Data, never>
+    ? ImplementationArgumentWithDefinition<Argument, Definition, Data>
     : never;
 
 type ImplementationCallback<Config, Definition, Data> = (

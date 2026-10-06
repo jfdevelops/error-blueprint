@@ -60,13 +60,14 @@ describe('public inference contract', () => {
         scope: z.literal('field'),
       }),
     )
-    .implement(({ context, scope }) => {
+    .implement(({ code, context, scope }) => {
+      expectTypeOf(code).toEqualTypeOf<'invalidField'>();
       expectTypeOf(scope).toEqualTypeOf<'field'>();
       expectTypeOf(context).toEqualTypeOf<{
         field: string;
         scope: 'field';
       }>();
-      return `${context.field} is invalid`;
+      return `${code}: ${context.field} is invalid`;
     });
 
   it('preserves definition, data, input, and configured property types', () => {

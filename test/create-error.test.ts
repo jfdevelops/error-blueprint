@@ -124,7 +124,7 @@ describe('error factory', () => {
         scope: z.literal('field'),
       }),
     )
-    .implement(({ context }) => `${context.field} is invalid`);
+    .implement(({ code, context }) => `${code}: ${context.field} is invalid`);
 
   class InvalidFieldError extends InvalidFieldBase {}
 
@@ -136,7 +136,7 @@ describe('error factory', () => {
     expect(error).toBeInstanceOf(InvalidFieldBase);
     expect(error).toBeInstanceOf(InvalidFieldError);
     expect(error.name).toBe('InvalidFieldError');
-    expect(error.message).toBe('email is invalid');
+    expect(error.message).toBe('invalidField: email is invalid');
     expect(error.code).toBe('invalidField');
     expect(error.scope).toBe('field');
     expect(error.context).toEqual({ field: 'email', scope: 'field' });
@@ -189,10 +189,18 @@ describe('error factory', () => {
     });
     const ContextError = createContextError({ code: 'context' })
       .defineContext(
-        z.object({ value: z.string() }).transform(({ value }) => {
-          calls.push('context');
-          return { length: value.length, value };
-        }),
+        z
+          .object({
+            value: z.string(),
+          })
+          .transform(({ value }) => {
+            calls.push('context');
+
+            return {
+              length: value.length,
+              value,
+            };
+          }),
       )
       .implement((context) => String(context.length));
     const error = new ContextError({ value: 'three' });
@@ -225,7 +233,7 @@ describe('error factory', () => {
     expect(error.toJSON()).toEqual({
       code: 'invalidField',
       context: { field: 'email', scope: 'field' },
-      message: 'email is invalid',
+      message: 'invalidField: email is invalid',
       name: 'InvalidFieldError',
       scope: 'field',
     });
@@ -311,6 +319,23 @@ describe('error factory', () => {
     const details = new Details('value');
 
     expect(new DataError(details).data).toBe(details);
+  });
+
+  it('preserves plain-object data forwarded directly to implementation', () => {
+    const implementation = vi.fn(() => 'data error');
+    const createDataError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'data', resolve: ({ input }) => input },
+      message: ({ data, implementation: render }) => render(data),
+    });
+    const DataError = createDataError({ code: 'data' }).implement(
+      implementation,
+    );
+    const data = { value: 'original' };
+
+    new DataError(data);
+
+    expect(implementation).toHaveBeenCalledWith(data);
   });
 
   it('rejects protected and conflicting properties', () => {

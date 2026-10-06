@@ -72,7 +72,7 @@ export class InvalidFieldError extends createFormError({
     }),
   )
   .implement(
-    ({ context }) => `${context.field} is invalid`,
+    ({ code, context }) => `${code}: ${context.field} is invalid`,
   ) {}
 
 const error = new InvalidFieldError({ field: 'email' });
@@ -103,7 +103,11 @@ The definition builder exposes both `defineContext` and `implement`.
 `defineContext` returns a narrower builder that exposes only `implement`, so a
 context schema can be selected only once. Calling `implement` directly keeps
 context schemas optional. Every implementation receives exactly one argument;
-the blueprint decides its shape when it calls `implementation(argument)`.
+the blueprint decides its shape when it calls `implementation(argument)`. When
+that argument is a constructed object, the concrete definition fields are added
+automatically, so implementations can read values such as `code` without the
+blueprint repeating them. Forwarding opaque data directly preserves its original
+scalar, tuple, object, or class-instance shape.
 
 The `definition` option must implement Standard Schema V1 and must produce an
 object. Validation runs when `factory(definition)` is called. Because class

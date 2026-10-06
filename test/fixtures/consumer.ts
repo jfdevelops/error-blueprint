@@ -47,7 +47,7 @@ class ConsumerError extends createConsumerError({
       value: z.string(),
     }),
   )
-  .implement(({ context }) => context.value) {}
+  .implement(({ code, context }) => `${code}: ${context.value}`) {}
 
 const error = new ConsumerError({ value: 'working' });
 
