@@ -98,6 +98,34 @@ describe('public inference contract', () => {
     });
   });
 
+  it('narrows unknown values to the shared family shape', () => {
+    const value: unknown = new InvalidFieldError({ field: 'email' });
+    type FamilyJson = {
+      code: string;
+      context: unknown;
+      message: string;
+      name: string;
+      scope: string;
+    };
+
+    if (createDomainError.is(value)) {
+      expectTypeOf(value.code).toBeString();
+      expectTypeOf(value.scope).toBeString();
+      expectTypeOf(value.context).toBeUnknown();
+      expectTypeOf(value.toJSON()).toEqualTypeOf<FamilyJson>();
+      expectTypeOf(value).toMatchTypeOf<Error>();
+      if (false) {
+        // @ts-expect-error only fields shared by the family are available
+        value.missing;
+      }
+    }
+
+    if (value instanceof createDomainError.Error) {
+      expectTypeOf(value.code).toBeString();
+      expectTypeOf(value.toJSON()).toEqualTypeOf<FamilyJson>();
+    }
+  });
+
   it('rejects invalid definitions and constructor inputs', () => {
     if (false) {
       // @ts-expect-error definition fields must match the schema input

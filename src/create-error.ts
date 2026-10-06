@@ -524,5 +524,6 @@ export function createError<
 
   return Object.assign(createDefinition, {
     Error: FamilyError,
+    is: (value: unknown) => value instanceof FamilyError,
   }) as unknown as ErrorFamilyFactory<Schema, typeof config>;
 }

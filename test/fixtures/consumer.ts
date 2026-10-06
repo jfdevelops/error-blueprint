@@ -159,3 +159,19 @@ function requireUser(user: { id: string } | undefined) {
 }
 
 requireUser({ id: 'user_123' });
+
+// README: factory.is
+function describeFailure(failure: unknown) {
+  if (createConsumerError.is(failure)) {
+    expectTypeOf(failure.code).toBeString();
+    expectTypeOf(failure.context).toBeUnknown();
+    const shared: InstanceType<typeof createConsumerError.Error> = failure;
+    const narrowed: typeof failure = shared;
+    void narrowed;
+    return failure.code;
+  }
+
+  return undefined;
+}
+
+describeFailure(error);

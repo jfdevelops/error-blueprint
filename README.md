@@ -281,8 +281,27 @@ unchanged. The types recognize common built-in classes, but they cannot tell
 your own class instances from plain objects, so wrap those in an object, as in
 `implementation({ user })`, when the implementation needs definition fields.
 
-Every family exposes its shared base as `factory.Error`. Concrete classes and
-named subclasses also inherit a lazy invariant helper:
+Every family exposes its shared base as `factory.Error`, and `factory.is(value)`
+checks whether a value came from any class in the family. Both narrow to the
+fields every family error shares: definition-derived properties use the
+schema's output type, and the data property is `unknown`.
+
+```ts
+try {
+  await saveForm();
+} catch (error) {
+  if (createFormError.is(error)) {
+    error.code; // string
+    error.context; // unknown
+  }
+}
+```
+
+`is` is an `instanceof` check, so errors created by another copy of the
+factory, such as one loaded in a different realm, do not match. To name the
+shared instance type, use `InstanceType<typeof createFormError.Error>`.
+
+Concrete classes and named subclasses also inherit a lazy invariant helper:
 
 ```ts
 InvalidFieldError.invariant(

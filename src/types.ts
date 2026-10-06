@@ -398,14 +398,28 @@ interface ErrorClassStatics {
 }
 
 /**
+ * The instance type shared by every error in one family.
+ *
+ * Definition-derived fields use the schema's general output type, and the data
+ * property is `unknown` because each concrete error types its own data.
+ */
+export type FamilyError<Schema extends StandardSchemaV1, Config> =
+  InstanceProperties<
+    Config,
+    ConcreteDefinition<Schema>,
+    unknown,
+    (argument: never) => string
+  >;
+
+/**
  * The shared native `Error` base created for one blueprint.
  *
  * Use `factory.Error` for family-wide `instanceof` checks or as a public base
  * type for errors created by the same blueprint.
  */
-export type FamilyErrorClass = (abstract new (
+export type FamilyErrorClass<Instance extends Error = Error> = (abstract new (
   ...arguments_: never[]
-) => Error) &
+) => Instance) &
   ErrorClassStatics;
 
 /** An extendable concrete error class produced by a configured factory. */
@@ -558,5 +572,23 @@ export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
    * error instanceof createRequestError.Error;
    * ```
    */
-  Error: FamilyErrorClass;
+  Error: FamilyErrorClass<FamilyError<Schema, Config>>;
+
+  /**
+   * Checks whether `value` was created by any class in this family, narrowing
+   * it to the fields every family error shares.
+   *
+   * This is an `instanceof factory.Error` check, so errors from another copy
+   * of the factory, such as one loaded in a different realm, do not match.
+   *
+   * @example
+   * ```ts
+   * catch (error) {
+   *   if (createRequestError.is(error)) {
+   *     error.code; // string
+   *   }
+   * }
+   * ```
+   */
+  is(value: unknown): value is FamilyError<Schema, Config>;
 };

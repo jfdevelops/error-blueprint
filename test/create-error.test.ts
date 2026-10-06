@@ -271,6 +271,28 @@ describe('error factory', () => {
     );
   });
 
+  it('identifies family errors with is', () => {
+    const createOtherError = createError({
+      definition: z.object({ code: z.string() }),
+      data: { property: 'data', resolve: ({ input }) => input },
+      message: () => 'other',
+    });
+    const OtherFamilyError = createOtherError({ code: 'other' }).implement(
+      () => 'other',
+    );
+
+    expect(createDomainError.is(new InvalidFieldError({ field: 'email' }))).toBe(
+      true,
+    );
+    expect(createDomainError.is(new InvalidFieldBase({ field: 'email' }))).toBe(
+      true,
+    );
+    expect(createDomainError.is(new OtherFamilyError(undefined))).toBe(false);
+    expect(createDomainError.is(new Error('plain'))).toBe(false);
+    expect(createDomainError.is({ code: 'invalidField' })).toBe(false);
+    expect(createDomainError.is(undefined)).toBe(false);
+  });
+
   it('does not add toJSON unless configured', () => {
     const createPlainError = createError({
       definition: z.object({ code: z.string() }),
