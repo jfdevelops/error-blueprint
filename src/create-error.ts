@@ -4,6 +4,7 @@ import type {
   BlueprintConfig,
   BlueprintContext,
   BlueprintErrorTemplate,
+  CreateErrorConfig,
   ErrorFamilyFactory,
 } from './types.js';
 
@@ -198,50 +199,43 @@ export function createError<
   const Properties extends object,
   Json,
 >(
-  config: {
-    /** A synchronous Standard Schema for every concrete error definition. */
-    definition: Schema;
+  config: CreateErrorConfig<
+    Schema,
+    {
+      data: DataConfig;
+      message: MessageCallback;
+      properties(context: BlueprintContext<Schema>): Properties;
 
-    /** Resolves constructor input and names its public instance property. */
-    data: DataConfig;
-
-    /** Creates the native error message from the resolved blueprint context. */
-    message: MessageCallback;
-
-    /** Adds public fields and methods to each error instance. */
-    properties(context: BlueprintContext<Schema>): Properties;
-
-    /** Returns the value produced by `error.toJSON()` and `JSON.stringify`. */
-    toJSON(
-      error: BlueprintErrorTemplate<
-        {
-          data: NoInfer<DataConfig>;
-          properties(
-            context: BlueprintContext<Schema>,
-          ): NoInfer<Properties>;
-        }
-      >,
-    ): Json;
-  } &
-    (StandardSchemaV1.InferOutput<Schema> extends object
-      ? unknown
-      : { definition: never }),
+      toJSON(
+        error: BlueprintErrorTemplate<
+          {
+            data: NoInfer<DataConfig>;
+            properties(
+              context: BlueprintContext<Schema>,
+            ): NoInfer<Properties>;
+          }
+        >,
+      ): Json;
+    }
+  >,
 ): ErrorFamilyFactory<
   Schema,
-  {
-    definition: Schema;
-    data: DataConfig;
-    message: MessageCallback;
-    properties(context: BlueprintContext<Schema>): Properties;
-    toJSON(
-      error: BlueprintErrorTemplate<
-        {
-          data: DataConfig;
-          properties(context: BlueprintContext<Schema>): Properties;
-        }
-      >,
-    ): Json;
-  }
+  CreateErrorConfig<
+    Schema,
+    {
+      data: DataConfig;
+      message: MessageCallback;
+      properties(context: BlueprintContext<Schema>): Properties;
+      toJSON(
+        error: BlueprintErrorTemplate<
+          {
+            data: DataConfig;
+            properties(context: BlueprintContext<Schema>): Properties;
+          }
+        >,
+      ): Json;
+    }
+  >
 >;
 export function createError<
   const Schema extends StandardSchemaV1,
@@ -249,57 +243,40 @@ export function createError<
   const MessageCallback extends BlueprintConfig<Schema>['message'],
   Json,
 >(
-  config: {
-    /** A synchronous Standard Schema for every concrete error definition. */
-    definition: Schema;
-
-    /** Resolves constructor input and names its public instance property. */
-    data: DataConfig;
-
-    /** Creates the native error message from the resolved blueprint context. */
-    message: MessageCallback;
-
-    /** This overload represents a blueprint without additional properties. */
-    properties?: never;
-
-    /** Returns the value produced by `error.toJSON()` and `JSON.stringify`. */
-    toJSON(
-      error: BlueprintErrorTemplate<{ data: NoInfer<DataConfig> }>,
-    ): Json;
-  } &
-    (StandardSchemaV1.InferOutput<Schema> extends object
-      ? unknown
-      : { definition: never }),
+  config: CreateErrorConfig<
+    Schema,
+    {
+      data: DataConfig;
+      message: MessageCallback;
+      properties?: never;
+      toJSON(
+        error: BlueprintErrorTemplate<{ data: NoInfer<DataConfig> }>,
+      ): Json;
+    }
+  >,
 ): ErrorFamilyFactory<
   Schema,
-  {
-    definition: Schema;
-    data: DataConfig;
-    message: MessageCallback;
-    toJSON(error: BlueprintErrorTemplate<{ data: DataConfig }>): Json;
-  }
+  CreateErrorConfig<
+    Schema,
+    {
+      data: DataConfig;
+      message: MessageCallback;
+      toJSON(error: BlueprintErrorTemplate<{ data: DataConfig }>): Json;
+    }
+  >
 >;
 export function createError<
   const Schema extends StandardSchemaV1,
   const Config extends Omit<BlueprintConfig<Schema>, 'definition'>,
 >(
-  config: {
-    /** A synchronous Standard Schema for every concrete error definition. */
-    definition: Schema;
-  } & Config &
-    (StandardSchemaV1.InferOutput<Schema> extends object
-      ? unknown
-      : { definition: never }),
-): ErrorFamilyFactory<Schema, { definition: Schema } & Config>;
+  config: CreateErrorConfig<Schema, Config>,
+): ErrorFamilyFactory<Schema, CreateErrorConfig<Schema, Config>>;
 export function createError<
   const Schema extends StandardSchemaV1,
   const Config extends Omit<BlueprintConfig<Schema>, 'definition'>,
 >(
-  config: { definition: Schema } & Config &
-    (StandardSchemaV1.InferOutput<Schema> extends object
-      ? unknown
-      : { definition: never }),
-): ErrorFamilyFactory<Schema, { definition: Schema } & Config> {
+  config: CreateErrorConfig<Schema, Config>,
+): ErrorFamilyFactory<Schema, CreateErrorConfig<Schema, Config>> {
   validateBlueprint(config as BlueprintConfig<StandardSchemaV1>);
 
   class FamilyError extends Error {
@@ -420,6 +397,6 @@ export function createError<
     Error: FamilyError,
   }) as unknown as ErrorFamilyFactory<
     Schema,
-    { definition: Schema } & Config
+    CreateErrorConfig<Schema, Config>
   >;
 }

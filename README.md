@@ -88,6 +88,26 @@ No explicit generic arguments or `as const` assertions are needed. Concrete
 definition values remain literals when they are compatible with the schema's
 parsed output.
 
+For reusable or separately declared configurations, the package exports a
+common `CreateErrorConfig` type:
+
+```ts
+import { createError, type CreateErrorConfig } from '@jfdevelops/create-error';
+
+const definition = z.object({ code: z.string() });
+
+const config = {
+  definition,
+  data: {
+    property: 'context',
+    resolve: ({ input }) => input,
+  },
+  message: ({ data, implementation }) => implementation(data),
+} satisfies CreateErrorConfig<typeof definition>;
+
+const createDomainError = createError(config);
+```
+
 ## How the factory works
 
 The API has four stages:

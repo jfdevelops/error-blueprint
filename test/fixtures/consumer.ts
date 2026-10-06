@@ -1,7 +1,22 @@
 import { expectTypeOf } from 'vitest';
 import { z } from 'zod';
 
-import { createError } from '@jfdevelops/create-error';
+import {
+  createError,
+  type CreateErrorConfig,
+} from '@jfdevelops/create-error';
+
+const reusableDefinition = z.object({ code: z.string() });
+const reusableConfig = {
+  definition: reusableDefinition,
+  data: {
+    property: 'context',
+    resolve: ({ input }) => input,
+  },
+  message: ({ data, implementation }) => implementation(data),
+} satisfies CreateErrorConfig<typeof reusableDefinition>;
+
+createError(reusableConfig);
 
 const createConsumerError = createError({
   definition: z.object({
