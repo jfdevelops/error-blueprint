@@ -2,6 +2,7 @@
   "name": "@jfdevelops/create-error",
   "version": "0.1.0",
   "description": "Create strongly typed, configurable error families.",
+  "sideEffects": false,
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -37,24 +38,33 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
+  "dependencies": {
+    "@standard-schema/spec": "1.1.0"
+  },
   "scripts": {
     "build": "tsdown",
-    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm test:package",
+    "changeset": "changeset",
     "dev": "tsdown --watch",
+    "release": "changeset publish",
     "test": "vitest run",
+    "test:package": "tsc --noEmit -p test/fixtures/tsconfig.json",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "version-packages": "changeset version"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "devDependencies": {
+    "@changesets/cli": "3.0.3",
     "@types/node": "^24.3.0",
     "rolldown": "^1.0.0-beta.31",
     "tsdown": "^0.17.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.11",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "zod": "4.6.5"
   }
 }
