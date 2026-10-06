@@ -121,38 +121,36 @@ type ReplaceTuple<
   >;
 };
 
-type ReplaceTemplate<Type, Definition, Data, Implementation> = Type extends TypeSlot<
-  'definition',
-  infer Key
->
-  ? Key extends keyof Definition
-    ? Definition[Key]
-    : never
-  : Type extends TypeSlot<'data'>
-    ? Data
-    : Type extends TypeSlot<'implementation'>
-      ? Implementation
-      : Type extends (...arguments_: infer Arguments) => infer Result
-        ? (
-            ...arguments_: ReplaceTuple<
-              Arguments,
-              Definition,
-              Data,
-              Implementation
-            >
-          ) => ReplaceTemplate<Result, Definition, Data, Implementation>
-        : Type extends readonly unknown[]
-          ? ReplaceTuple<Type, Definition, Data, Implementation>
-          : Type extends object
-            ? {
-                [Key in keyof Type]: ReplaceTemplate<
-                  Type[Key],
-                  Definition,
-                  Data,
-                  Implementation
-                >;
-              }
-            : Type;
+type ReplaceTemplate<Type, Definition, Data, Implementation> =
+  Type extends TypeSlot<'definition', infer Key>
+    ? Key extends keyof Definition
+      ? Definition[Key]
+      : never
+    : Type extends TypeSlot<'data'>
+      ? Data
+      : Type extends TypeSlot<'implementation'>
+        ? Implementation
+        : Type extends (...arguments_: infer Arguments) => infer Result
+          ? (
+              ...arguments_: ReplaceTuple<
+                Arguments,
+                Definition,
+                Data,
+                Implementation
+              >
+            ) => ReplaceTemplate<Result, Definition, Data, Implementation>
+          : Type extends readonly unknown[]
+            ? ReplaceTuple<Type, Definition, Data, Implementation>
+            : Type extends object
+              ? {
+                  [Key in keyof Type]: ReplaceTemplate<
+                    Type[Key],
+                    Definition,
+                    Data,
+                    Implementation
+                  >;
+                }
+              : Type;
 
 type PropertiesTemplate<Config> = Config extends {
   properties: (...arguments_: infer _Arguments) => infer Properties;
@@ -182,12 +180,7 @@ type InstanceProperties<Config, Definition, Data, Implementation> =
       toJSON: (...arguments_: infer _Arguments) => infer Json;
     }
       ? {
-          toJSON(): ReplaceTemplate<
-            Json,
-            Definition,
-            Data,
-            Implementation
-          >;
+          toJSON(): ReplaceTemplate<Json, Definition, Data, Implementation>;
         }
       : object);
 
@@ -206,7 +199,7 @@ type ImplementationArgument<Config, Definition, Data> =
     : never;
 
 type ImplementationCallback<Config, Definition, Data> = (
-  argument: ImplementationArgument<Config, Definition, Data>
+  argument: ImplementationArgument<Config, Definition, Data>,
 ) => string;
 
 interface ErrorClassStatics {
@@ -225,49 +218,13 @@ export type FamilyErrorClass = (abstract new (
   ErrorClassStatics;
 
 /** An extendable concrete error class produced by a configured factory. */
-type ConcreteErrorClass<Input, Instance> = (new (
-  input: Input,
-  options?: ErrorOptions,
-) => Instance) &
-  ErrorClassStatics;
+interface ConcreteErrorClass<Input, Instance> extends ErrorClassStatics {
+  new (input: Input, options?: ErrorOptions): Instance;
+}
 
-/** Builds a concrete error class after a context schema has been selected. */
-export type ContextDefinitionBuilder<
-  Config,
-  Definition,
-  ContextSchema extends StandardSchemaV1,
-> = {
-  implement(
-    implementation: ImplementationCallback<
-      Config,
-      Definition,
-      StandardSchemaV1.InferOutput<ContextSchema>
-    >,
-  ): ConcreteErrorClass<
-    ConstructorInput<Config, StandardSchemaV1.InferInput<ContextSchema>>,
-    InstanceProperties<
-      Config,
-      Definition,
-      StandardSchemaV1.InferOutput<ContextSchema>,
-      ImplementationCallback<
-        Config,
-        Definition,
-        StandardSchemaV1.InferOutput<ContextSchema>
-      >
-    >
-  >;
-};
-
-/** Selects optional context validation and captures a consumer implementation. */
-export type ErrorDefinitionBuilder<Config, Definition> = {
-  defineContext<const ContextSchema extends StandardSchemaV1>(
-    context: ContextSchema,
-  ): ContextDefinitionBuilder<Config, Definition, ContextSchema>;
-
-  implement<Data>(
-    implementation: ImplementationCallback<Config, Definition, Data>,
-  ): ConcreteErrorClass<
-    ConstructorInput<Config, Data>,
+type ImplementedErrorClass<Config, Definition, Input, Data> =
+  ConcreteErrorClass<
+    ConstructorInput<Config, Input>,
     InstanceProperties<
       Config,
       Definition,
@@ -275,7 +232,50 @@ export type ErrorDefinitionBuilder<Config, Definition> = {
       ImplementationCallback<Config, Definition, Data>
     >
   >;
-};
+
+type BuilderData<Data, InferredData> = [Data] extends [never]
+  ? InferredData
+  : Data;
+
+type DefaultBuilderData<Data> = [Data] extends [never] ? unknown : Data;
+
+type BuilderInput<Input, Data> = [Input] extends [never] ? Data : Input;
+
+/** Captures an implementation after its constructor and resolved data are known. */
+export interface ImplementationBuilder<
+  Config,
+  Definition,
+  Input = never,
+  Data = never,
+> {
+  implement<InferredData = DefaultBuilderData<Data>>(
+    implementation: ImplementationCallback<
+      Config,
+      Definition,
+      BuilderData<Data, InferredData>
+    >,
+  ): ImplementedErrorClass<
+    Config,
+    Definition,
+    BuilderInput<Input, BuilderData<Data, InferredData>>,
+    BuilderData<Data, InferredData>
+  >;
+}
+
+/** Selects optional context validation and captures a consumer implementation. */
+export interface ErrorDefinitionBuilder<
+  Config,
+  Definition,
+> extends ImplementationBuilder<Config, Definition> {
+  defineContext<const ContextSchema extends StandardSchemaV1>(
+    context: ContextSchema,
+  ): ImplementationBuilder<
+    Config,
+    Definition,
+    StandardSchemaV1.InferInput<ContextSchema>,
+    StandardSchemaV1.InferOutput<ContextSchema>
+  >;
+}
 
 export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
   /** Parses a definition while preserving compatible literal fields. */
