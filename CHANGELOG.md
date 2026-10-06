@@ -1,5 +1,12 @@
 # @jfdevelops/create-error
 
+## 0.1.1
+
+### Patch Changes
+
+- 74d1b3c: Include the configured data property in generated instance types and derive
+  definition-backed fields from parsed schema output so transforms remain sound.
+
 ## 0.1.0
 
 ### Minor Changes
