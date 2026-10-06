@@ -23,6 +23,14 @@
 - **Category**: direction
 - **Planned at**: commit `9778039`, 2026-08-17
 
+> **Implemented API update (2026-10-05):** The implementation stage now uses
+> `factory(definition).implement(callback)`. Consumers may optionally insert
+> `.defineContext(standardSchema)` before `.implement(callback)` to validate,
+> transform, and infer resolved context. This supersedes the direct
+> `factory(definition)(implementation)` syntax in the original plan below.
+> Implementation callbacks receive one blueprint-defined argument; the
+> acceptance blueprint uses `{ scope, context }`.
+
 ## Why this matters
 
 `createMultiStepFormError` currently combines reusable class-construction

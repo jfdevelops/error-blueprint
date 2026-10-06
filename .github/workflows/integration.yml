@@ -1,0 +1,19 @@
+name: Integration (Version Package)
+
+on:
+  push:
+    branches:
+      - alpha
+      - beta
+      - rc
+
+permissions:
+  id-token: write
+  contents: write
+  packages: write
+  pull-requests: write
+  checks: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml

@@ -16,5 +16,6 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "test", "tsdown.config.ts", "vite.config.ts"]
+  "include": ["src", "test", "tsdown.config.ts", "vite.config.ts"],
+  "exclude": ["test/fixtures"]
 }
