@@ -166,6 +166,30 @@ function assignProperties(
  * `message`, then `properties`. Definition literals and constructor data are
  * inferred without explicit generic arguments or `as const` at ordinary call
  * sites.
+ *
+ * @param config Defines the family's definition schema, data lifecycle,
+ * message, public properties, and optional JSON representation.
+ * @returns A callable factory with a shared `.Error` base class.
+ *
+ * @example
+ * ```ts
+ * import { createError } from '@jfdevelops/create-error';
+ * import { z } from 'zod';
+ *
+ * const createRequestError = createError({
+ *   definition: z.object({ code: z.string() }),
+ *   data: {
+ *     property: 'context',
+ *     resolve: ({ input }) => input,
+ *   },
+ *   message: ({ data, implementation }) => implementation(data),
+ *   properties: ({ definition }) => ({ code: definition.code }),
+ * });
+ *
+ * class MissingUserError extends createRequestError({ code: 'missingUser' })
+ *   .defineContext(z.object({ userId: z.string() }))
+ *   .implement(({ userId }) => `User ${userId} was not found`) {}
+ * ```
  */
 export function createError<
   const Schema extends StandardSchemaV1,
@@ -175,10 +199,19 @@ export function createError<
   Json,
 >(
   config: {
+    /** A synchronous Standard Schema for every concrete error definition. */
     definition: Schema;
+
+    /** Resolves constructor input and names its public instance property. */
     data: DataConfig;
+
+    /** Creates the native error message from the resolved blueprint context. */
     message: MessageCallback;
+
+    /** Adds public fields and methods to each error instance. */
     properties(context: BlueprintContext<Schema>): Properties;
+
+    /** Returns the value produced by `error.toJSON()` and `JSON.stringify`. */
     toJSON(
       error: BlueprintErrorTemplate<
         {
@@ -217,10 +250,19 @@ export function createError<
   Json,
 >(
   config: {
+    /** A synchronous Standard Schema for every concrete error definition. */
     definition: Schema;
+
+    /** Resolves constructor input and names its public instance property. */
     data: DataConfig;
+
+    /** Creates the native error message from the resolved blueprint context. */
     message: MessageCallback;
+
+    /** This overload represents a blueprint without additional properties. */
     properties?: never;
+
+    /** Returns the value produced by `error.toJSON()` and `JSON.stringify`. */
     toJSON(
       error: BlueprintErrorTemplate<{ data: NoInfer<DataConfig> }>,
     ): Json;
@@ -241,7 +283,10 @@ export function createError<
   const Schema extends StandardSchemaV1,
   const Config extends Omit<BlueprintConfig<Schema>, 'definition'>,
 >(
-  config: { definition: Schema } & Config &
+  config: {
+    /** A synchronous Standard Schema for every concrete error definition. */
+    definition: Schema;
+  } & Config &
     (StandardSchemaV1.InferOutput<Schema> extends object
       ? unknown
       : { definition: never }),

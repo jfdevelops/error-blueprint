@@ -47,14 +47,30 @@ type ImplementationSlot = TypeSlot<'implementation'> & {
   ): string & TypeSlot<'implementationArgument', Argument>;
 };
 
+/** Values available while an error instance is being created. */
 export interface BlueprintContext<Schema extends StandardSchemaV1> {
+  /** The parsed definition captured by the concrete error class. */
   definition: DefinitionTemplate<Schema>;
+
+  /** The resolved, and optionally schema-validated, constructor data. */
   data: DataSlot;
+
+  /**
+   * Calls the concrete error's implementation with one argument.
+   *
+   * The argument passed here defines the implementation callback's parameter
+   * type. Concrete definition fields are included automatically when the
+   * argument is a plain object.
+   */
   implementation: ImplementationSlot;
 }
 
+/** Values available when resolving a concrete error's constructor input. */
 export interface ResolveContext<Schema extends StandardSchemaV1> {
+  /** The parsed definition captured by the concrete error class. */
   definition: DefinitionTemplate<Schema>;
+
+  /** The value passed to the concrete error constructor. */
   input: object;
 }
 
@@ -66,20 +82,53 @@ export interface BlueprintConfig<Schema extends StandardSchemaV1> {
    */
   definition: Schema;
 
+  /**
+   * Controls how constructor input becomes the error's stored data.
+   *
+   * Use `resolve` to normalize input or combine it with the concrete
+   * definition. The resulting value is validated by `defineContext`, when
+   * present, and then stored under `property` on every error instance.
+   */
   data: {
-    /** The instance property that receives the resolved data. */
+    /**
+     * The public instance property that receives the final resolved data.
+     *
+     * For example, `property: 'context'` makes `error.context` available.
+     */
     property: string;
-    /** Resolves constructor input before message and property callbacks run. */
+
+    /**
+     * Converts constructor input into the value used by the error blueprint.
+     *
+     * This callback runs first. It can return the input unchanged, normalize
+     * it, or add values from the concrete definition. Its result becomes the
+     * input to the optional context schema.
+     */
     resolve(context: ResolveContext<Schema>): unknown;
   };
 
-  /** Creates the native `Error.message` after data resolution. */
+  /**
+   * Creates the native `Error.message` after data resolution and validation.
+   */
   message(context: BlueprintContext<Schema>): string;
 
-  /** Creates additional instance properties and methods after the message. */
+  /**
+   * Creates additional public fields and methods for each error instance.
+   *
+   * Use this to expose definition values such as `code`, derive fields from
+   * resolved data, or attach convenience methods. It does not transform or
+   * validate constructor input; use `data.resolve` and `defineContext` for
+   * that.
+   */
   properties?(context: BlueprintContext<Schema>): object;
 
-  /** Enables custom JSON serialization for every error in the family. */
+  /**
+   * Serializes every error in the family when `toJSON()` or `JSON.stringify`
+   * is called.
+   *
+   * The callback receives the fully constructed error, including the data
+   * property and any fields or methods returned by `properties`.
+   */
   toJSON?(error: Error & Record<string, unknown>): unknown;
 }
 
@@ -164,6 +213,12 @@ type DataPropertyTemplate<Config> = Config extends {
   ? { [Key in Property]: DataSlot }
   : object;
 
+/**
+ * The error shape visible to a blueprint's `toJSON` callback.
+ *
+ * It contains native `Error` fields, the configured data property, and every
+ * member returned by `properties`.
+ */
 export type BlueprintErrorTemplate<Config> = Error &
   DataPropertyTemplate<Config> &
   PropertiesTemplate<Config>;
@@ -218,6 +273,13 @@ type ImplementationCallback<Config, Definition, Data> = (
 ) => string;
 
 interface ErrorClassStatics {
+  /**
+   * Throws this error class when `condition` is falsy.
+   *
+   * A function can be supplied as `input` to avoid constructing error data
+   * unless the invariant fails. TypeScript narrows `condition` after a
+   * successful call.
+   */
   invariant<Condition, Input>(
     this: new (input: Input, options?: ErrorOptions) => Error,
     condition: Condition,
@@ -226,7 +288,12 @@ interface ErrorClassStatics {
   ): asserts condition;
 }
 
-/** The shared native `Error` base created for one blueprint. */
+/**
+ * The shared native `Error` base created for one blueprint.
+ *
+ * Use `factory.Error` for family-wide `instanceof` checks or as a public base
+ * type for errors created by the same blueprint.
+ */
 export type FamilyErrorClass = (abstract new (
   ...arguments_: never[]
 ) => Error) &
@@ -234,6 +301,11 @@ export type FamilyErrorClass = (abstract new (
 
 /** An extendable concrete error class produced by a configured factory. */
 interface ConcreteErrorClass<Input, Instance> extends ErrorClassStatics {
+  /**
+   * Creates an error from family-specific input.
+   *
+   * Pass native `ErrorOptions` as the second argument to preserve a `cause`.
+   */
   new (input: Input, options?: ErrorOptions): Instance;
 }
 
@@ -262,13 +334,20 @@ type Expand<Type> = Type extends (...arguments_: infer Arguments) => infer Resul
   ? (...arguments_: Arguments) => Result
   : Type;
 
-/** Captures an implementation after its constructor and resolved data are known. */
+/** Captures the final behavior for one concrete error class. */
 export interface ImplementationBuilder<
   Config,
   Definition,
   Input = never,
   Data = never,
 > {
+  /**
+   * Creates an extendable error class from a message implementation.
+   *
+   * The callback receives the single argument chosen by the blueprint's call
+   * to `implementation(argument)`. When that argument is a plain object, the
+   * concrete definition's fields are also available on it.
+   */
   implement<InferredData = DefaultBuilderData<Data>>(
     implementation: Expand<ImplementationCallback<
       Config,
@@ -283,11 +362,18 @@ export interface ImplementationBuilder<
   >;
 }
 
-/** Selects optional context validation and captures a consumer implementation. */
+/** Configures one concrete error definition before creating its class. */
 export interface ErrorDefinitionBuilder<
   Config,
   Definition,
 > extends ImplementationBuilder<Config, Definition> {
+  /**
+   * Validates and optionally transforms resolved data with a Standard Schema.
+   *
+   * The schema's input becomes the concrete class's constructor input and its
+   * output becomes the stored data and implementation value. Validation must
+   * be synchronous. After selecting a schema, only `implement` is available.
+   */
   defineContext<const ContextSchema extends StandardSchemaV1>(
     context: ContextSchema,
   ): ImplementationBuilder<
@@ -298,12 +384,23 @@ export interface ErrorDefinitionBuilder<
   >;
 }
 
+/**
+ * A callable factory for creating related, strongly typed error classes.
+ *
+ * Call it with a concrete definition to receive a builder, or use `.Error` as
+ * the common base class for every error produced by this factory.
+ */
 export type ErrorFamilyFactory<Schema extends StandardSchemaV1, Config> = {
-  /** Parses a definition while preserving compatible literal fields. */
+  /**
+   * Parses and captures a concrete definition while preserving compatible
+   * literal values in the resulting error class.
+   */
   <const Definition extends DefinitionInput<Schema>>(
     definition: ExactDefinition<DefinitionInput<Schema>, Definition>,
   ): ErrorDefinitionBuilder<Config, ConcreteDefinition<Schema, Definition>>;
 
-  /** The shared native `Error` base for every class created by this factory. */
+  /**
+   * The shared native `Error` base for every class created by this factory.
+   */
   Error: FamilyErrorClass;
 };

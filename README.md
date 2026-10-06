@@ -114,6 +114,82 @@ object. Validation runs when `factory(definition)` is called. Because class
 creation is synchronous, a schema whose `validate` method returns a promise is
 rejected with a `TypeError`.
 
+## What `data` and `properties` do
+
+`data` defines the constructor-input lifecycle. Its `resolve` callback receives
+the concrete definition and the value passed to `new ErrorClass(input)`. The
+callback can preserve that input, normalize it, or combine it with definition
+values. After optional `defineContext` validation, the final value is stored on
+the instance using `data.property`.
+
+`properties` defines the rest of the instance API. It can expose definition
+values such as a stable error code, derive fields from the resolved data, or add
+methods and getters. It does not participate in input validation or
+transformation.
+
+For a small error family, the constructor input can pass straight through and
+`properties` can be omitted entirely:
+
+```ts
+const createLookupError = createError({
+  definition: z.object({ code: z.string() }),
+  data: {
+    property: 'resourceId',
+    resolve: ({ input }) => input,
+  },
+  message: ({ data, implementation }) => implementation(data),
+});
+
+class MissingUserError extends createLookupError({ code: 'missingUser' })
+  .defineContext(z.string())
+  .implement((resourceId) => `User ${resourceId} was not found`) {}
+
+const error = new MissingUserError('user_123');
+error.resourceId; // string
+```
+
+Use both options when constructor input needs normalization and the error should
+present a richer public API:
+
+```ts
+const createValidationError = createError({
+  definition: z.object({
+    code: z.string(),
+    section: z.string(),
+  }),
+  data: {
+    property: 'context',
+    resolve: ({ definition, input }) => ({
+      ...input,
+      section: definition.section,
+    }),
+  },
+  message: ({ data, implementation }) => implementation(data),
+  properties: ({ definition, data }) => ({
+    code: definition.code,
+    section: definition.section,
+    describe: () => `${definition.code} in ${data.section}`,
+  }),
+});
+
+class InvalidEmailError extends createValidationError({
+  code: 'invalidEmail',
+  section: 'profile',
+})
+  .defineContext(
+    z.object({
+      field: z.string(),
+      section: z.literal('profile'),
+    }),
+  )
+  .implement(({ field }) => `${field} is invalid`) {}
+
+const error = new InvalidEmailError({ field: 'email' });
+error.context; // { field: string; section: "profile" }
+error.code; // "invalidEmail"
+error.describe(); // "invalidEmail in profile"
+```
+
 Use schema-native restrictions when definitions have a closed set of values:
 
 ```ts
