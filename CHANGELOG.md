@@ -1,5 +1,13 @@
 # @jfdevelops/create-error
 
+## 0.2.1
+
+### Patch Changes
+
+- c262b48: Export every type that appears in public `createError` signatures from the
+  package root so consumers with `declaration: true` can emit portable `.d.ts`
+  files without TS2883, TS4023, or TS2742.
+
 ## 0.2.0
 
 ### Minor Changes
