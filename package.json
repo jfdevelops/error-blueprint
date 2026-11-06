@@ -48,7 +48,7 @@
     "dev": "tsdown --watch",
     "release": "changeset publish",
     "test": "vitest run",
-    "test:package": "tsc --noEmit -p test/fixtures/tsconfig.json",
+    "test:package": "tsc --noEmit -p test/fixtures/tsconfig.json && tsc -p test/fixtures/tsconfig.declarations.json",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "version-packages": "changeset version"
