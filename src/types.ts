@@ -1,9 +1,9 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
-declare const typeSlot: unique symbol;
+export declare const typeSlot: unique symbol;
 
 /** Marks a blueprint value that is resolved by a later builder stage. */
-type TypeSlot<Kind extends string, Payload = never> = {
+export type TypeSlot<Kind extends string, Payload = never> = {
   readonly [typeSlot]: {
     readonly kind: Kind;
     readonly payload: Payload;
@@ -35,7 +35,7 @@ type ConcreteDefinition<Schema extends StandardSchemaV1> =
       }
     : never;
 
-type DataSlot = TypeSlot<'data'>;
+export type DataSlot = TypeSlot<'data'>;
 
 type ImplementationSlot = TypeSlot<'implementation'> & {
   <const Argument>(
@@ -366,7 +366,7 @@ export type InvariantInput<Input> = ExtendsNever<
   () => Input
 >;
 
-interface ErrorClassStatics {
+export interface ErrorClassStatics {
   /**
    * Throws this error class when `condition` is falsy.
    *
@@ -423,7 +423,7 @@ export type FamilyErrorClass<Instance extends Error = Error> = (abstract new (
   ErrorClassStatics;
 
 /** An extendable concrete error class produced by a configured factory. */
-interface ConcreteErrorClass<Input, Instance> extends ErrorClassStatics {
+export interface ConcreteErrorClass<Input, Instance> extends ErrorClassStatics {
   /**
    * Creates an error from family-specific input.
    *
@@ -432,7 +432,7 @@ interface ConcreteErrorClass<Input, Instance> extends ErrorClassStatics {
   new (input: Input, options?: ErrorOptions): Instance;
 }
 
-type ImplementedErrorClass<Config, Definition, Input, Data> =
+export type ImplementedErrorClass<Config, Definition, Input, Data> =
   ConcreteErrorClass<
     ConstructorInput<Config, Input>,
     InstanceProperties<

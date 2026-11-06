@@ -1,6 +1,20 @@
 export { createError, invariant } from './create-error.js';
 export type {
+  BlueprintContext,
+  BlueprintErrorTemplate,
+  ConcreteErrorClass,
   CreateErrorConfig,
+  DataSlot,
+  ErrorClassStatics,
+  ErrorDefinitionBuilder,
+  ErrorFamilyFactory,
+  FamilyError,
+  FamilyErrorClass,
   ImplementOptions,
+  ImplementationBuilder,
+  ImplementedErrorClass,
   InvariantInput,
+  ResolveContext,
+  TypeSlot,
+  typeSlot,
 } from './types.js';
