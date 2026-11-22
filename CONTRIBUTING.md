@@ -55,10 +55,18 @@ against the package rather than relying on runtime output alone.
 Public pages live in `docs/framework/agnostic/v0/`, matching the package major.
 The docs addon in `jfdevelops.json` selects this package and its public entry point.
 
+### Generate the API reference
+
+After installing development dependencies, run:
+
 ```sh
 pnpm docs:generate
 pnpm docs:check
 ```
+
+Open `docs/framework/agnostic/v0/reference/index.md` locally to browse the generated
+API reference. The reference is generated during CI validation but is not
+published by the docs workflow or committed to the repository.
 
 Generation creates the TypeDoc API reference, the schema-v2 `docs/docs.json`, and
 navigation `meta.json` files. These outputs are ignored by Git; commit authored

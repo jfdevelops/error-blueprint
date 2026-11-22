@@ -15,7 +15,7 @@ Valibot, or ArkType. `create-error` does not bundle one.
 ## Documentation
 
 - [Getting started](docs/framework/agnostic/v0/quick-start.md)
-- [API reference](docs/framework/agnostic/v0/reference/index.md)
+- [API reference (generate locally)](CONTRIBUTING.md#generate-the-api-reference)
 - [Recipes](docs/framework/agnostic/v0/guides/recipes.md)
 - [Contributing and local setup](CONTRIBUTING.md)
 
